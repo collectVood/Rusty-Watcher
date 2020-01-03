@@ -8,12 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="2.1.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="websocket-sharp">
-      <HintPath>..\..\..\websocket-sharp-master\websocket-sharp\bin\Debug_Ubuntu\websocket-sharp.dll</HintPath>
-    </Reference>
+    <PackageReference Include="WebSocketSharpFork" Version="1.0.4" />
   </ItemGroup>
 
 </Project>

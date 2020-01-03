@@ -13,9 +13,9 @@ namespace DiscordBot
         public class Data
         {
             [JsonProperty("Discord refresh (seconds)")]
-            public int DiscordDelay = 15;
+            public int DiscordDelay = 60;
             [JsonProperty("Reconnect delay (seconds)")]
-            public int ReconnectDelay = 5;
+            public int ReconnectDelay = 60;
             [JsonProperty("Servers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<ServerData> ServerData = new List<ServerData> { new ServerData() };
             [JsonProperty("Debug")]
@@ -58,7 +58,7 @@ namespace DiscordBot
 
         private static void Main()
         {
-            string directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+            string directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);

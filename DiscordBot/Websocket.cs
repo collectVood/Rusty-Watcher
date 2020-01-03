@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Threading.Tasks;
-using WebSocketSharp;
 using Newtonsoft.Json;
 using Discord;
 using Discord.WebSocket;
+using WebSocketSharp;
 
 namespace DiscordBot
 {
+
     #region Rcon Class
 
     public class Packet
@@ -80,10 +81,12 @@ namespace DiscordBot
 
     public class Websocket
     {
-        public WebSocket _ws;
+        public WebSocketSharp.WebSocket _ws;
         public Program.ServerData _data;
         public DiscordSocketClient _client;    
+
         public string lastUpdateString;
+        public bool isConnected => _ws.ReadyState == WebSocketState.Open && _ws.ReadyState != WebSocketState.Closed;
 
         public Websocket(Program.ServerData data, DiscordSocketClient client)
         {
@@ -94,68 +97,24 @@ namespace DiscordBot
         public async Task StartAsync()
         {
             _ws = new WebSocket($"ws://{_data.RconIP}:{_data.RconPort}/{_data.RconPW}");
-            
-            _ws.Log.Level = LogLevel.Trace;
+
+            _ws.Log.Output = (_, __) => { };
 
             Log.Info("Websocket: Connecting...", _client);
 
             try
             {
+                _ws.OnOpen += async (sender, e) => await OnOpen(sender, e);
+                _ws.OnClose += async (sender, e) => await OnClose(sender, e);
+                _ws.OnMessage += async (sender, e) => await OnMessage(sender, e);
+                _ws.OnError += async (sender, e) => await OnError(sender, e);
+
                 _ws.Connect();
                 ServerInfo();
-
-                await TryReconnect();
             }
             catch (Exception)
             {
             } 
-            
-            _ws.OnOpen += async (sender, e) =>
-            {               
-                Log.Info($"Websocket: Connected", _client);
-                await SetStatus("Connecting...");
-            };
-                          
-           _ws.OnMessage += async (sender, e) =>
-            {               
-                try
-                {
-                    Log.Debug(_ws.Ping("serverinfo").ToString(), _client);
-                    Log.Warning("Received message");
-                    var data = JsonConvert.DeserializeObject<ServerInfoData>(e.Data);
-                    var serverInfo = JsonConvert.DeserializeObject<ServerInfoMessage>(data.MessageContent);
-                    
-                    if (serverInfo.Queued > 0)
-                    {
-                        if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
-                        {
-                            await SetStatus(serverInfo.MaxPlayers + "/" + serverInfo.MaxPlayers + $" (Queued: {serverInfo.Queued})");
-                            return;
-                        }
-                        await SetStatus(serverInfo.Players + serverInfo.Joining + "/" + serverInfo.MaxPlayers + $" (Queued: {serverInfo.Queued})");
-                        return;
-                    }
-                    if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
-                    {
-                        await SetStatus(serverInfo.MaxPlayers + "/" + serverInfo.MaxPlayers);
-                        return;
-                    }
-                    await SetStatus(serverInfo.Players + serverInfo.Joining + "/" + serverInfo.MaxPlayers);
-                }
-                catch (Exception)
-                {
-                }
-            };
-
-            _ws.OnError += (sender, e) => Log.Error($"Websocket Error: {e.Message}", e.Exception.StackTrace, _client);
-
-            _ws.OnClose += async (sender, e) =>
-            {
-                Log.Warning(e.Reason, _client);
-                Log.Info("Websocket: Connection closed", _client);
-
-                await TryReconnect(true);
-            };
 
             await Task.Delay(-1);
         }
@@ -169,31 +128,19 @@ namespace DiscordBot
 
         public async Task SetStatus(string status)
         {
-            Log.Warning(status);
             if (status == lastUpdateString) return;
             lastUpdateString = status;
-
+            
             if (status == "Offline") await _client.SetStatusAsync(UserStatus.DoNotDisturb);
             else if (_client.Status != UserStatus.Online) await _client.SetStatusAsync(UserStatus.Online);
-            await _client.SetGameAsync(status, null);
-            Log.Debug($"Websocket: {status}", _client);
+            await _client.SetGameAsync(status, null);          
         }
 
-        public async Task TryReconnect(bool isClose = false)
+        public async Task TryReconnect()
         {
-            if (!isClose)
+            if (!isConnected)
             {
-                while (!_ws.IsConnected)
-                {
-                    Log.Info("Websocket: Reconnecting", _client);
-                    try { _ws.Connect(); }
-                    catch { }
-                    await Task.Delay(Program._data.ReconnectDelay * 1000);
-                }
-            }
-            else
-            {
-                Log.Info("Websocket: Reconnecting", _client);
+                Log.Info("Websocket: Reconnecting...", _client);
                 try { _ws.Connect(); }
                 catch { }
                 await Task.Delay(Program._data.ReconnectDelay * 1000);
@@ -205,9 +152,61 @@ namespace DiscordBot
             while (true)
             {
                 await Task.Delay(Program._data.DiscordDelay * 1000);
-                if (_ws.IsConnected) SendMessage("serverinfo");
+                if (isConnected) SendMessage("serverinfo");
                 else await SetStatus("Offline");
             }
         }
+
+        #region Websocket Events
+
+        public async Task OnOpen(object sender, EventArgs e)
+        {
+            Log.Info($"Websocket: Connected!", _client);
+            await SetStatus("Connecting...");
+        }
+
+        public async Task OnClose(object sender, CloseEventArgs e)
+        {
+            Log.Info("Websocket: Connection closed", _client);
+            await SetStatus("Offline");
+            await TryReconnect();
+        }
+
+        public async Task OnMessage(object sender, MessageEventArgs e)
+        {
+            try
+            {
+                var data = JsonConvert.DeserializeObject<ServerInfoData>(e.Data);
+                var serverInfo = JsonConvert.DeserializeObject<ServerInfoMessage>(data.MessageContent);
+
+                if (serverInfo.Queued > 0)
+                {
+                    if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
+                    {
+                        await SetStatus(serverInfo.MaxPlayers + "/" + serverInfo.MaxPlayers + $" (Queued: {serverInfo.Queued})");
+                        return;
+                    }
+                    await SetStatus(serverInfo.Players + serverInfo.Joining + "/" + serverInfo.MaxPlayers + $" (Queued: {serverInfo.Queued})");
+                    return;
+                }
+                if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
+                {
+                    await SetStatus(serverInfo.MaxPlayers + "/" + serverInfo.MaxPlayers);
+                    return;
+                }
+                await SetStatus(serverInfo.Players + serverInfo.Joining + "/" + serverInfo.MaxPlayers);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        public async Task OnError(object sender, ErrorEventArgs e)
+        {
+            if (e.Exception == null) return;
+            Log.Error($"Websocket Error: {e.Message}", e.Exception.StackTrace, _client);
+        }
+
+        #endregion
     }
 }
