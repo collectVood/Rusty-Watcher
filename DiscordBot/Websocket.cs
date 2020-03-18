@@ -220,7 +220,7 @@ namespace DiscordBot
                         fields.Add(new EmbedFieldBuilder()
                         {
                             Name = "Map",
-                            Value = $"[Link]({mapLink})",
+                            Value = $"[View here]({mapLink})",
                             IsInline = true
                         });
                     }
