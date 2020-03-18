@@ -39,17 +39,17 @@ namespace DiscordBot
         
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        private string Region = string.Empty;
-
-        private string ServerSeed = string.Empty;
-
-        private string ServerWorldSize = string.Empty;
-
         #endregion
 
         #region Cached Data
 
         public string lastUpdateString;
+
+        private string Region = string.Empty;
+
+        private string ServerSeed = string.Empty;
+
+        private string ServerWorldSize = string.Empty;
 
         #endregion
 
@@ -295,14 +295,21 @@ namespace DiscordBot
 
         public async Task SetStatus(string status)
         {
-            if (!Data.Settings.ShowPlayerCountStatus) return;
-
             if (status == lastUpdateString) return;
             lastUpdateString = status;
             
-            if (status == "Offline") await Client.SetStatusAsync(UserStatus.DoNotDisturb);
-            else if (Client.Status != UserStatus.Online) await Client.SetStatusAsync(UserStatus.Online);
-            await Client.SetGameAsync(status, null);          
+            if (Data.Settings.ShowPlayerCountStatus)
+            {
+                if (status == "Offline") await Client.SetStatusAsync(UserStatus.DoNotDisturb);
+                else if (Client.Status != UserStatus.Online) await Client.SetStatusAsync(UserStatus.Online);
+                await Client.SetGameAsync(status, null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
+            }
+            else
+            {
+                lastUpdateString = Data.Settings.StatusMessage;
+                await Client.SetGameAsync(Data.Settings.StatusMessage, null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
+            }
+      
         }
 
         public async Task TryReconnect()

@@ -79,8 +79,10 @@ namespace DiscordBot
 
         private async Task OnReady()
         {
-            if (Data.Settings.ShowPlayerCountStatus) await Client.SetGameAsync("Connecting...", null);
-            else await Client.SetGameAsync(Data.Settings.StatusMessage, null);
+            if (Data.Settings.ShowPlayerCountStatus)
+                await Client.SetGameAsync("Connecting...", null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
+            else 
+                await Client.SetGameAsync(Data.Settings.StatusMessage, null);
 
             GetCurrentGuild();
 
