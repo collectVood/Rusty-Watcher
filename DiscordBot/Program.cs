@@ -59,6 +59,7 @@ namespace DiscordBot
                 Directory.CreateDirectory(FilesDirectory);
             }
             
+            //config
             string path = Path.Combine(FilesDirectory, "config.json");
             if (File.Exists(path))
             {

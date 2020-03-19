@@ -111,29 +111,25 @@ namespace DiscordBot
             try
             {
                 //Status
-                string status = string.Empty;
+                string players = string.Empty;
+                string queued = string.Empty;
                 if (serverInfo.Queued > 0)
                 {
-                    if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
-                    {
-                        status = serverInfo.MaxPlayers + "/" + serverInfo.MaxPlayers + $" ({serverInfo.Queued} Queued)";
-                    }
-                    else
-                    {
-                        status = serverInfo.Players + serverInfo.Joining + "/" + serverInfo.MaxPlayers + $" ({serverInfo.Queued} Queued)";
-                    }
+                    queued = $"({serverInfo.Queued} Queued)";
                 }
-                else if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
+                if (serverInfo.Players + serverInfo.Joining > serverInfo.MaxPlayers)
                 {
-                    status = serverInfo.MaxPlayers + "/" + serverInfo.MaxPlayers;
+                    players = serverInfo.MaxPlayers.ToString();
                 }
-                else status = serverInfo.Players + serverInfo.Joining + "/" + serverInfo.MaxPlayers;
+                else players = (serverInfo.Players + serverInfo.Joining).ToString();
 
-                await SetStatus(status);
+                await SetStatus(string.Format(Program.Data.Localization.PlayerStatus, 
+                    players, serverInfo.MaxPlayers, queued));
 
                 //Embed
                 if (!Data.Settings.ShowServerInfoEmbed) return;
-                await UpdateOrCreateEmbed(serverInfo, status);
+                await UpdateOrCreateEmbed(serverInfo, string.Format(Program.Data.Localization.PlayerStatus,
+                    players, serverInfo.MaxPlayers, queued));
             }
             catch (Exception e)
             {
@@ -161,48 +157,45 @@ namespace DiscordBot
                     }                   
                 }
 
-                string title = string.Empty;
                 await GetRegion();
-                if (!string.IsNullOrEmpty(Region)) title += Region + " ";
-                title += $"{serverInfo.Hostname}";
                 
                 var embedBuilder = new EmbedBuilder();
                                
-                embedBuilder.WithTitle(title);
+                embedBuilder.WithTitle(string.Format(Program.Data.Localization.EmbedTitle, Region, serverInfo.Hostname));
                 embedBuilder.WithUrl(Data.Settings.ServerInfoEmbedLink);
-                embedBuilder.WithDescription($"{Data.Rcon.ServerIP}:{Data.Rcon.ServerPort}");
+                embedBuilder.WithDescription(string.Format(Program.Data.Localization.EmbedDescription, Data.Rcon.ServerIP, Data.Rcon.ServerPort));
                 
                 var fields = new List<EmbedFieldBuilder>
                 {
                     new EmbedFieldBuilder()
                     {
-                        Name = "Players",
-                        Value = status,
-                        IsInline = true
+                        Name = Program.Data.Localization.EmbedFieldPlayer.EmbedName,
+                        Value = string.Format(Program.Data.Localization.EmbedFieldPlayer.EmbedValue, status),
+                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
-                        Name = "FPS",
-                        Value = serverInfo.Framerate,
-                        IsInline = true
+                        Name = Program.Data.Localization.EmbedFieldFPS.EmbedName,
+                        Value = string.Format(Program.Data.Localization.EmbedFieldFPS.EmbedValue, serverInfo.Framerate),
+                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
-                        Name = "Entities",
-                        Value = serverInfo.EntityCount,
-                        IsInline = true
+                        Name = Program.Data.Localization.EmbedFieldEntities.EmbedName,
+                        Value = string.Format(Program.Data.Localization.EmbedFieldEntities.EmbedValue, serverInfo.EntityCount),
+                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
-                        Name = "Game time",
-                        Value = serverInfo.GameTime,
-                        IsInline = true
+                        Name = Program.Data.Localization.EmbedFieldGametime.EmbedName,
+                        Value = string.Format(Program.Data.Localization.EmbedFieldGametime.EmbedValue, serverInfo.GameTime),
+                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
                     },                       
                     new EmbedFieldBuilder()
-                    {
-                        Name = "Uptime",
-                        Value = TimeSpan.FromSeconds(serverInfo.Uptime),
-                        IsInline = true
+                    {                        
+                        Name = Program.Data.Localization.EmbedFieldUptime.EmbedName,
+                        Value = string.Format(Program.Data.Localization.EmbedFieldUptime.EmbedValue, TimeSpan.FromSeconds(serverInfo.Uptime)),
+                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
                     }
                 };
 
@@ -219,9 +212,9 @@ namespace DiscordBot
                     {
                         fields.Add(new EmbedFieldBuilder()
                         {
-                            Name = "Map",
-                            Value = $"[View here]({mapLink})",
-                            IsInline = true
+                            Name = Program.Data.Localization.EmbedFieldMap.EmbedName,
+                            Value = string.Format(Program.Data.Localization.EmbedFieldMap.EmbedValue, mapLink),
+                            IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
                         });
                     }
                 }
@@ -318,7 +311,10 @@ namespace DiscordBot
             {
                 await Task.Delay(Program.Data.ReconnectDelay * 1000);
                 Log.Info("Websocket: Reconnecting...", Client);
-                try { WS.Connect(); }
+                try
+                {
+                    if (!IsConnected) WS.Connect(); 
+                }
                 catch { }
             }
         }

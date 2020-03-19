@@ -51,7 +51,7 @@ If you don't know what a discord bot token is, or how to retrieve it, then head 
 ### Default Configuration
 
 ```json
-{
+{{
   "Discord refresh (seconds)": 30,
   "Reconnect delay (seconds)": 10,
   "Create output file": false,
@@ -60,7 +60,8 @@ If you don't know what a discord bot token is, or how to retrieve it, then head 
       "Discord": {
         "Bot Token": "",
         "Guild ID": 0,
-        "Server info channel ID": 0
+        "Server info channel ID": 0,
+        "Activity type (0 = Playing, 1 = Streaming, 2 = Listening, 3 = Watching)": 0
       },
       "Rcon": {
         "Server IP": "",
@@ -77,6 +78,42 @@ If you don't know what a discord bot token is, or how to retrieve it, then head 
       }
     }
   ],
+  "Localization": {
+    "Player Count Status": "{0} / {1} {2}",
+    "Embed Title": "{0} {1}",
+    "Embed Description": "{0}:{1}",
+    "Embed Footer": "Last Wiped {0}",
+    "Embed Field Player": {
+      "Name": "Players",
+      "Value": "{0}",
+      "Inline": true
+    },
+    "Embed Field FPS": {
+      "Name": "FPS",
+      "Value": "{0}",
+      "Inline": true
+    },
+    "Embed Field Entities": {
+      "Name": "Entities",
+      "Value": "{0}",
+      "Inline": true
+    },
+    "Embed Field Game time": {
+      "Name": "Game time",
+      "Value": "{0}",
+      "Inline": true
+    },
+    "Embed Field Uptime": {
+      "Name": "Uptime",
+      "Value": "{0}",
+      "Inline": true
+    },
+    "Embed Field Map": {
+      "Name": "Map",
+      "Value": "[View here]({0})",
+      "Inline": true
+    }
+  },
   "Debug": false
 }
 ```
