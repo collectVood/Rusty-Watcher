@@ -51,7 +51,7 @@ If you don't know what a discord bot token is, or how to retrieve it, then head 
 ### Default Configuration
 
 ```json
-{{
+{
   "Discord refresh (seconds)": 30,
   "Reconnect delay (seconds)": 10,
   "Create output file": false,
