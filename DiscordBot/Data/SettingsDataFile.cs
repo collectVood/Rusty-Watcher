@@ -13,6 +13,18 @@ namespace DiscordBot.Data
         [JsonProperty("Show server info in embed")]
         public bool ShowServerInfoEmbed = true;
         [JsonProperty("Server info embed link")]
-        public string ServerInfoEmbedLink = string.Empty;   
+        public string ServerInfoEmbedLink = string.Empty;          
+        [JsonProperty("Server info embed color (rgb)")]
+        public RGB ServerInfoEmbedColor = new RGB();   
+    }
+
+    public class RGB
+    {
+        [JsonProperty("Red")]
+        public int Red = 44;
+        [JsonProperty("Green")]
+        public int Green = 47;
+        [JsonProperty("Blue")]
+        public int Blue = 51;
     }
 }

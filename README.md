@@ -74,7 +74,12 @@ If you don't know what a discord bot token is, or how to retrieve it, then head 
         "Status message (only if player count is not shown in status)": "",
         "Get server region data over (https://ipinfo.io)": false,
         "Show server info in embed": true,
-        "Server info embed link": ""
+        "Server info embed link": "",
+        "Server info embed color (rgb)": {
+          "Red": 44,
+          "Green": 47,
+          "Blue": 51
+        }
       }
     }
   ],

@@ -231,6 +231,8 @@ namespace DiscordBot
                     Text = string.Format(Program.Data.Localization.EmbedFooter, footer)
                 });
 
+                embedBuilder.WithColor(Data.Settings.ServerInfoEmbedColor.Red, Data.Settings.ServerInfoEmbedColor.Green, Data.Settings.ServerInfoEmbedColor.Blue);
+
                 if (ServerInfoMessage == null)
                 {
                     //Create message
