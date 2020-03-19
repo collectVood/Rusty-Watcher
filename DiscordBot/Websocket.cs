@@ -222,13 +222,13 @@ namespace DiscordBot
                 embedBuilder.WithFields(fields);
 
                 var wipeDate = DateTime.ParseExact(serverInfo.SaveCreatedTime, "MM/dd/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-                string footer = $"Last Wiped {wipeDate.ToString("MMM")} {wipeDate.Day} {wipeDate.Year}";
+                string footer = $"{wipeDate.ToString("MMM")} {wipeDate.Day} {wipeDate.Year}";
                 var difference = DateTime.Now - wipeDate;
                 if (difference.Days > 0) footer += $" ({difference.Days} days ago)";
 
                 embedBuilder.WithFooter(new EmbedFooterBuilder()
                 {
-                    Text = footer
+                    Text = string.Format(Program.Data.Localization.EmbedFooter, footer)
                 });
 
                 if (ServerInfoMessage == null)
