@@ -17,6 +17,8 @@ namespace DiscordBot
 
         public IGuild CurrentGuild;
 
+        public string LastUpdateString;
+
         #endregion
 
         public ServerDataFile Data;
@@ -72,7 +74,8 @@ namespace DiscordBot
 
         private Task OnDisconnected(Exception _)
         {
-            Websocket?.Close();
+            Log.Info("OnDisconnected triggered", Client);
+            //Websocket?.Close();
 
             return Task.CompletedTask;
         }
@@ -80,18 +83,41 @@ namespace DiscordBot
         private async Task OnReady()
         {
             if (Data.Settings.ShowPlayerCountStatus)
-                await Client.SetGameAsync("Connecting...", null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
+                await SetStatus("Connecting...");
             else 
                 await Client.SetGameAsync(Data.Settings.StatusMessage, null);
 
             GetCurrentGuild();
 
-            await new Websocket(this).StartAsync();
+            if (Websocket == null) await new Websocket(this).StartAsync();
+            else if (!Websocket.IsConnected)
+            {
+                Websocket.TryReconnect();
+            }
         }
 
         #endregion
 
         #region Methods
+
+        public async Task SetStatus(string status)
+        {
+            if (status == LastUpdateString) return;
+            LastUpdateString = status;
+
+            if (Data.Settings.ShowPlayerCountStatus)
+            {
+                if (status == "Offline") await Client.SetStatusAsync(UserStatus.DoNotDisturb);
+                else if (Client.Status != UserStatus.Online) await Client.SetStatusAsync(UserStatus.Online);
+                await Client.SetGameAsync(status, null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
+            }
+            else
+            {
+                LastUpdateString = Data.Settings.StatusMessage;
+                await Client.SetGameAsync(Data.Settings.StatusMessage, null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
+            }
+
+        }
 
         public bool TryParseJson<T>(string obj, out T result)
         {

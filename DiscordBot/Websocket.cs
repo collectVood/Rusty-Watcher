@@ -21,6 +21,8 @@ namespace DiscordBot
 
         public DiscordSocketClient Client => Bot.Client;
 
+        public bool StartupRequired = true;
+
         public IGuild CurrentGuild => Bot.CurrentGuild;
 
         public ITextChannel ServerInfoEmbedChannel = null;
@@ -42,8 +44,6 @@ namespace DiscordBot
         #endregion
 
         #region Cached Data
-
-        public string lastUpdateString;
 
         private string Region = string.Empty;
 
@@ -68,6 +68,8 @@ namespace DiscordBot
 
         public async Task StartAsync()
         {
+            if (!StartupRequired) return;
+
             WS = new WebSocket($"ws://{Data.Rcon.ServerIP}:{Data.Rcon.RconPort}/{Data.Rcon.RconPW}");
 
             WS.Log.Output = (_, __) => { };
@@ -82,6 +84,9 @@ namespace DiscordBot
                 WS.OnError += async (sender, e) => await OnError(sender, e);
 
                 WS.Connect();
+
+                StartupRequired = false;
+
                 ServerInfo();
             }
             catch (Exception e)
@@ -98,7 +103,7 @@ namespace DiscordBot
 
         public void Close()
         {
-            WS?.Close();
+            WS?.Close(69);
             Log.Info("Websocket connection closed manually.");
         }
 
@@ -123,7 +128,7 @@ namespace DiscordBot
                 }
                 else players = (serverInfo.Players + serverInfo.Joining).ToString();
 
-                await SetStatus(string.Format(Program.Data.Localization.PlayerStatus, 
+                await Bot.SetStatus(string.Format(Program.Data.Localization.PlayerStatus, 
                     players, serverInfo.MaxPlayers, queued));
 
                 //Embed
@@ -171,25 +176,25 @@ namespace DiscordBot
                     {
                         Name = Program.Data.Localization.EmbedFieldPlayer.EmbedName,
                         Value = string.Format(Program.Data.Localization.EmbedFieldPlayer.EmbedValue, status),
-                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
+                        IsInline = Program.Data.Localization.EmbedFieldPlayer.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
                         Name = Program.Data.Localization.EmbedFieldFPS.EmbedName,
                         Value = string.Format(Program.Data.Localization.EmbedFieldFPS.EmbedValue, serverInfo.Framerate),
-                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
+                        IsInline = Program.Data.Localization.EmbedFieldFPS.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
                         Name = Program.Data.Localization.EmbedFieldEntities.EmbedName,
                         Value = string.Format(Program.Data.Localization.EmbedFieldEntities.EmbedValue, serverInfo.EntityCount),
-                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
+                        IsInline = Program.Data.Localization.EmbedFieldEntities.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
                         Name = Program.Data.Localization.EmbedFieldGametime.EmbedName,
                         Value = string.Format(Program.Data.Localization.EmbedFieldGametime.EmbedValue, serverInfo.GameTime),
-                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
+                        IsInline = Program.Data.Localization.EmbedFieldGametime.EmbedInline
                     },                       
                     new EmbedFieldBuilder()
                     {                        
@@ -287,26 +292,7 @@ namespace DiscordBot
 
             WS.Send(msg);
         }
-
-        public async Task SetStatus(string status)
-        {
-            if (status == lastUpdateString) return;
-            lastUpdateString = status;
-            
-            if (Data.Settings.ShowPlayerCountStatus)
-            {
-                if (status == "Offline") await Client.SetStatusAsync(UserStatus.DoNotDisturb);
-                else if (Client.Status != UserStatus.Online) await Client.SetStatusAsync(UserStatus.Online);
-                await Client.SetGameAsync(status, null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
-            }
-            else
-            {
-                lastUpdateString = Data.Settings.StatusMessage;
-                await Client.SetGameAsync(Data.Settings.StatusMessage, null, Enum.Parse<ActivityType>(Data.Discord.ActivityType.ToString()));
-            }
       
-        }
-
         public async Task TryReconnect()
         {
             if (!IsConnected)
@@ -326,7 +312,7 @@ namespace DiscordBot
             while (true)
             {
                 if (IsConnected) SendMessage("serverinfo", PacketIdentifier.ServerInfo);
-                else await SetStatus("Offline");
+                else await Bot.SetStatus("Offline");
                 await Task.Delay(Program.Data.DiscordDelay * 1000);
             }
         }        
@@ -345,7 +331,7 @@ namespace DiscordBot
         public async Task OnOpen(object sender, EventArgs e)
         {
             Log.Info($"Websocket: Connected!", Client);
-            await SetStatus("Connecting...");
+            await Bot.SetStatus("Connecting...");
 
             if (IsConnected)
             {
@@ -357,7 +343,9 @@ namespace DiscordBot
         public async Task OnClose(object sender, CloseEventArgs e)
         {
             Log.Info("Websocket: Connection closed", Client);
-            await SetStatus("Offline");
+            if (e.Code == 69) return;
+
+            await Bot.SetStatus("Offline");
             await TryReconnect();
         }
 
