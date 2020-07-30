@@ -92,7 +92,7 @@ namespace DiscordBot
             if (Websocket == null) await new Websocket(this).StartAsync();
             else if (!Websocket.IsConnected)
             {
-                Websocket.TryReconnect();
+                _ = Websocket.TryReconnect();
             }
         }
 

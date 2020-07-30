@@ -44,7 +44,6 @@ namespace DiscordBot
             {
                 Log.Error(e);
             }
-            Console.ReadKey();
         }
 
         #endregion
@@ -53,29 +52,40 @@ namespace DiscordBot
 
         private static void Main()
         {
-            FilesDirectory = Path.Combine(GetBasePath(), "Files");
-            if (!Directory.Exists(FilesDirectory))
+            try
             {
-                Directory.CreateDirectory(FilesDirectory);
+                Console.Title = "Player Count Bot made by @collect_vood#3773";
+
+                FilesDirectory = Path.Combine(GetBasePath(), "Files");
+                if (!Directory.Exists(FilesDirectory))
+                {
+                    Directory.CreateDirectory(FilesDirectory);
+                }
+
+                //config
+                string path = Path.Combine(FilesDirectory, "config.json");
+                if (File.Exists(path))
+                {
+                    string json = File.ReadAllText(path);
+                    Data = JsonConvert.DeserializeObject<DataFile>(json);
+                    Log.Info("Config found & loaded!");
+                }
+                else
+                {
+                    Log.Info("No config found, creating one!");
+                    Data = new DataFile();
+                }
+
+                File.WriteAllText(path, JsonConvert.SerializeObject(Data, JsonSettings));
+
+                new Program();
             }
-            
-            //config
-            string path = Path.Combine(FilesDirectory, "config.json");
-            if (File.Exists(path))
+            catch (Exception e)
             {
-                string json = File.ReadAllText(path);
-                Data = JsonConvert.DeserializeObject<DataFile>(json);
-                Log.Info("Config found & loaded!");
-            }
-            else
-            {
-                Log.Info("No config found, creating one!");
-                Data = new DataFile();
+                Log.Error(e);
             }
 
-            File.WriteAllText(path, JsonConvert.SerializeObject(Data, JsonSettings));
-
-            new Program();
+            Console.ReadKey();
         }
 
         #endregion

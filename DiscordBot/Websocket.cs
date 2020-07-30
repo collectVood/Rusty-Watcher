@@ -99,16 +99,6 @@ namespace DiscordBot
 
         #endregion
 
-        #region Close
-
-        public void Close()
-        {
-            WS?.Close(69);
-            Log.Info("Websocket connection closed manually.");
-        }
-
-        #endregion
-
         #region Methods
 
         public async Task ProcessServerInfo(ResponseServerInfo serverInfo)
@@ -128,12 +118,12 @@ namespace DiscordBot
                 }
                 else players = (serverInfo.Players + serverInfo.Joining).ToString();
 
-                await Bot.SetStatus(string.Format(Program.Data.Localization.PlayerStatus, 
+                await Bot.SetStatus(string.Format(Data.Localization.PlayerStatus, 
                     players, serverInfo.MaxPlayers, queued));
 
                 //Embed
                 if (!Data.Settings.ShowServerInfoEmbed) return;
-                await UpdateOrCreateEmbed(serverInfo, string.Format(Program.Data.Localization.PlayerStatus,
+                await UpdateOrCreateEmbed(serverInfo, string.Format(Data.Localization.PlayerStatus,
                     players, serverInfo.MaxPlayers, queued));
             }
             catch (Exception e)
@@ -166,41 +156,41 @@ namespace DiscordBot
                 
                 var embedBuilder = new EmbedBuilder();
                                
-                embedBuilder.WithTitle(string.Format(Program.Data.Localization.EmbedTitle, Region, serverInfo.Hostname));
+                embedBuilder.WithTitle(string.Format(Data.Localization.EmbedTitle, Region, serverInfo.Hostname));
                 embedBuilder.WithUrl(Data.Settings.ServerInfoEmbedLink);
-                embedBuilder.WithDescription(string.Format(Program.Data.Localization.EmbedDescription, Data.Rcon.ServerIP, Data.Rcon.ServerPort));
+                embedBuilder.WithDescription(string.Format(Data.Localization.EmbedDescription, Data.Rcon.ServerIP, Data.Rcon.ServerPort));
                 
                 var fields = new List<EmbedFieldBuilder>
                 {
                     new EmbedFieldBuilder()
                     {
-                        Name = Program.Data.Localization.EmbedFieldPlayer.EmbedName,
-                        Value = string.Format(Program.Data.Localization.EmbedFieldPlayer.EmbedValue, status),
-                        IsInline = Program.Data.Localization.EmbedFieldPlayer.EmbedInline
+                        Name = Data.Localization.EmbedFieldPlayer.EmbedName,
+                        Value = string.Format(Data.Localization.EmbedFieldPlayer.EmbedValue, status),
+                        IsInline = Data.Localization.EmbedFieldPlayer.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
-                        Name = Program.Data.Localization.EmbedFieldFPS.EmbedName,
-                        Value = string.Format(Program.Data.Localization.EmbedFieldFPS.EmbedValue, serverInfo.Framerate),
-                        IsInline = Program.Data.Localization.EmbedFieldFPS.EmbedInline
+                        Name = Data.Localization.EmbedFieldFPS.EmbedName,
+                        Value = string.Format(Data.Localization.EmbedFieldFPS.EmbedValue, serverInfo.Framerate),
+                        IsInline = Data.Localization.EmbedFieldFPS.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
-                        Name = Program.Data.Localization.EmbedFieldEntities.EmbedName,
-                        Value = string.Format(Program.Data.Localization.EmbedFieldEntities.EmbedValue, serverInfo.EntityCount),
-                        IsInline = Program.Data.Localization.EmbedFieldEntities.EmbedInline
+                        Name = Data.Localization.EmbedFieldEntities.EmbedName,
+                        Value = string.Format(Data.Localization.EmbedFieldEntities.EmbedValue, serverInfo.EntityCount),
+                        IsInline = Data.Localization.EmbedFieldEntities.EmbedInline
                     },
                     new EmbedFieldBuilder()
                     {
-                        Name = Program.Data.Localization.EmbedFieldGametime.EmbedName,
-                        Value = string.Format(Program.Data.Localization.EmbedFieldGametime.EmbedValue, serverInfo.GameTime),
-                        IsInline = Program.Data.Localization.EmbedFieldGametime.EmbedInline
+                        Name = Data.Localization.EmbedFieldGametime.EmbedName,
+                        Value = string.Format(Data.Localization.EmbedFieldGametime.EmbedValue, serverInfo.GameTime),
+                        IsInline = Data.Localization.EmbedFieldGametime.EmbedInline
                     },                       
                     new EmbedFieldBuilder()
                     {                        
-                        Name = Program.Data.Localization.EmbedFieldUptime.EmbedName,
-                        Value = string.Format(Program.Data.Localization.EmbedFieldUptime.EmbedValue, TimeSpan.FromSeconds(serverInfo.Uptime)),
-                        IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
+                        Name = Data.Localization.EmbedFieldUptime.EmbedName,
+                        Value = string.Format(Data.Localization.EmbedFieldUptime.EmbedValue, TimeSpan.FromSeconds(serverInfo.Uptime)),
+                        IsInline = Data.Localization.EmbedFieldUptime.EmbedInline
                     }
                 };
 
@@ -217,9 +207,9 @@ namespace DiscordBot
                     {
                         fields.Add(new EmbedFieldBuilder()
                         {
-                            Name = Program.Data.Localization.EmbedFieldMap.EmbedName,
-                            Value = string.Format(Program.Data.Localization.EmbedFieldMap.EmbedValue, mapLink),
-                            IsInline = Program.Data.Localization.EmbedFieldUptime.EmbedInline
+                            Name = Data.Localization.EmbedFieldMap.EmbedName,
+                            Value = string.Format(Data.Localization.EmbedFieldMap.EmbedValue, mapLink),
+                            IsInline = Data.Localization.EmbedFieldUptime.EmbedInline
                         });
                     }
                 }
@@ -233,7 +223,7 @@ namespace DiscordBot
 
                 embedBuilder.WithFooter(new EmbedFooterBuilder()
                 {
-                    Text = string.Format(Program.Data.Localization.EmbedFooter, footer)
+                    Text = string.Format(Data.Localization.EmbedFooter, footer)
                 });
 
                 embedBuilder.WithColor(Data.Settings.ServerInfoEmbedColor.Red, Data.Settings.ServerInfoEmbedColor.Green, Data.Settings.ServerInfoEmbedColor.Blue);
@@ -342,11 +332,8 @@ namespace DiscordBot
 
         public async Task OnClose(object sender, CloseEventArgs e)
         {
-            Log.Info("Websocket: Connection closed", Client);
-            if (e.Code == 69) return;
-
             await Bot.SetStatus("Offline");
-            await TryReconnect();
+            _ = TryReconnect();
         }
 
         public async Task OnMessage(object sender, MessageEventArgs args)

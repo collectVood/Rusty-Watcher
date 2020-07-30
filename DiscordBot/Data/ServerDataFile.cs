@@ -10,5 +10,7 @@ namespace DiscordBot.Data
         public RconDataFile Rcon = new RconDataFile();        
         [JsonProperty("Settings")]
         public SettingsDataFile Settings = new SettingsDataFile();
+        [JsonProperty("Localization")]
+        public LocalizationDataFile Localization = new LocalizationDataFile();
     }
 }

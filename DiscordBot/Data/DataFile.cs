@@ -13,8 +13,6 @@ namespace DiscordBot.Data
         public bool CreateOutputfile = false;
         [JsonProperty("Servers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
         public List<ServerDataFile> ServerData = new List<ServerDataFile> { new ServerDataFile() };
-        [JsonProperty("Localization")]
-        public LocalizationDataFile Localization = new LocalizationDataFile();
         [JsonProperty("Debug")]
         public bool Debug = false;
     }
