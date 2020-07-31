@@ -53,6 +53,7 @@ If you plan to use the chatlog feature, be sure to also install the plugin on yo
 ```
 For this head over to https://umod.org/games/rust and install oxide.
 Then move the RustyWatcher.cs file into your ./oxide/plugins folder.
+In case you are using BetterChat also be sure to update to the one I include in this file as it adds an essential API method.
 ```
 
 ### Discord Bot Token
