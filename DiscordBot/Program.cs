@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using Newtonsoft.Json;
-using DiscordBot.Data;
+using RustyWatcher.Data;
 
-namespace DiscordBot
+namespace RustyWatcher
 {
     public class Program
     {
@@ -31,6 +31,11 @@ namespace DiscordBot
         {
             EnableOutputFile();
 
+            if (string.IsNullOrEmpty(Program.Data.SteamAPIKey))
+            {
+                Log.Warning("No Steam API Key set! (Ignore this if you are not using the chatlog feature)");
+            }
+
             try
             {
                 var tasks = new List<Task>();
@@ -54,7 +59,7 @@ namespace DiscordBot
         {
             try
             {
-                Console.Title = "Player Count Bot made by @collect_vood#3773";
+                Console.Title = "Rusty Watcher made by @collect_vood#3773";
 
                 FilesDirectory = Path.Combine(GetBasePath(), "Files");
                 if (!Directory.Exists(FilesDirectory))
@@ -94,7 +99,8 @@ namespace DiscordBot
 
         private static void EnableOutputFile()
         {
-            if (!Data.CreateOutputfile) return;
+            if (!Data.CreateOutputfile) 
+                return;
 
             try
             {
@@ -115,6 +121,17 @@ namespace DiscordBot
         {
             using var processModule = Process.GetCurrentProcess().MainModule;
             return Path.GetDirectoryName(processModule?.FileName);
+        }
+
+        public static ulong TryGetSteamId(ulong discordId)
+        {
+            if (!Data.DiscordSteamIds.TryGetValue(discordId, out var steamId))
+            {
+                steamId = 0;
+                Log.Warning("No steamId found for user " + discordId + " consider setting one!");
+            }
+
+            return steamId;
         }
 
         #endregion

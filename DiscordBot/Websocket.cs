@@ -6,12 +6,15 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Discord;
 using Discord.WebSocket;
-using DiscordBot.Data;
-using DiscordBot.Rcon;
 using Newtonsoft.Json;
 using WebSocketSharp;
+using RustyWatcher.Data;
+using RustyWatcher.Rcon;
+using RustyWatcher.Steam;
+using System.Linq;
+using Discord.Rest;
 
-namespace DiscordBot
+namespace RustyWatcher
 {
     public class Websocket
     {
@@ -39,17 +42,23 @@ namespace DiscordBot
 
         public bool IsConnected => WS.ReadyState == WebSocketState.Open && WS.ReadyState != WebSocketState.Closed;
         
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient();
 
         #endregion
 
         #region Cached Data
 
-        private string Region = string.Empty;
+        private string _region = string.Empty;
 
-        private string ServerSeed = string.Empty;
+        private string _serverSeed = string.Empty;
 
-        private string ServerWorldSize = string.Empty;
+        private string _serverWorldSize = string.Empty;
+
+        private Dictionary<ulong, string> _steamAvatars = new Dictionary<ulong, string>();
+
+        private Queue<Embed> _messageQueue = new Queue<Embed>();
+
+        private HashSet<ulong> _chatLogAwaitingMessages = new HashSet<ulong>();
 
         #endregion
 
@@ -87,7 +96,10 @@ namespace DiscordBot
 
                 StartupRequired = false;
 
-                ServerInfo();
+                _ = Task.Run(ServerInfo);
+
+                if (Data.Chatlog.Use)
+                    _ = Task.Run(MessageDequeue);
             }
             catch (Exception e)
             {
@@ -116,15 +128,123 @@ namespace DiscordBot
                 {
                     players = serverInfo.MaxPlayers.ToString();
                 }
-                else players = (serverInfo.Players + serverInfo.Joining).ToString();
-
+                else
+                {
+                    players = (serverInfo.Players + serverInfo.Joining).ToString();
+                }
+                    
                 await Bot.SetStatus(string.Format(Data.Localization.PlayerStatus, 
                     players, serverInfo.MaxPlayers, queued));
 
                 //Embed
-                if (!Data.Settings.ShowServerInfoEmbed) return;
+                if (!Data.Serverinfo.ShowEmbed) 
+                    return;
+
                 await UpdateOrCreateEmbed(serverInfo, string.Format(Data.Localization.PlayerStatus,
                     players, serverInfo.MaxPlayers, queued));
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, Client);
+            }
+        }
+
+        public async Task ProcessCallback(ResponsePacket packet)
+        {
+            if (packet.MessageContent.Length < 1) 
+                return;
+
+            var embedList = new List<Embed>();
+            var embedBuilder = new EmbedBuilder();
+
+            if (packet.MessageContent.Length > 2000)
+            {
+                var splitText = packet.MessageContent.SplitInParts(2000);
+
+                for (int i = 0; i < splitText.Count(); i++)
+                {
+                    embedBuilder.WithAuthor("SERVER");
+
+                    embedBuilder.WithCurrentTimestamp();
+
+                    embedBuilder.WithFooter(i + "/" + (splitText.Count() - 1));
+
+                    embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.Red,
+                        Data.Chatlog.ServerMessageColour.Green, Data.Chatlog.ServerMessageColour.Blue);
+
+                    embedBuilder.WithDescription(splitText.ElementAt(i));
+
+                    embedList.Add(embedBuilder.Build());
+                }
+
+                await Bot.ChatlogWebhookClient.SendMessageAsync(null, false, embedList);
+                return;
+            }
+
+            embedBuilder.WithAuthor("SERVER");
+
+            embedBuilder.WithCurrentTimestamp();
+
+            embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.Red,
+                Data.Chatlog.ServerMessageColour.Green, Data.Chatlog.ServerMessageColour.Blue);
+
+            embedBuilder.WithDescription(packet.MessageContent);
+
+            embedList.Add(embedBuilder.Build());
+
+            await Bot.ChatlogWebhookClient.SendMessageAsync(null, false, embedList);
+        }
+
+        public async Task ProcessMessage(ResponseMessage msg)
+        {
+            if (!Data.Chatlog.Use)
+                return;
+
+            try
+            {
+                var embedBuilder = new EmbedBuilder();
+
+                string avatarLink = await GetAvatarlink(msg.UserID);
+
+                embedBuilder.WithAuthor(msg.Username, avatarLink, msg.UserID != 0 ? $"https://steamcommunity.com/profiles/{msg.UserID}" : null);
+
+                var message = msg.Content;
+
+                //Keep format in case BetterChat is used
+                if (message.Contains(":"))
+                {
+                    var messageArray = message.Split(':');
+                    if (messageArray.Length > 1)
+                    {
+                        if (messageArray[0].Contains(msg.Username))
+                            message = messageArray[1];
+                    }                      
+                }
+                    
+                embedBuilder.WithDescription(message);
+                
+                if (msg.Color.Length > 1)
+                {
+                    string colour = Bot.GetCompleteHex(msg.Color.Substring(1));
+                    embedBuilder.WithColor(Convert.ToUInt32($"0x{colour}", 16));
+                }
+
+                if (msg.UserID == 0)
+                {
+                    embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.Red, 
+                        Data.Chatlog.ServerMessageColour.Green, Data.Chatlog.ServerMessageColour.Blue);
+                }
+
+                var channel = (RustChannelType)msg.Channel;
+                string additionalInfo = (msg.UserID == 0 ? string.Empty : $" • {msg.UserID}");
+
+                embedBuilder.WithFooter(channel.ToString() + additionalInfo);
+                embedBuilder.WithCurrentTimestamp();
+
+                if (!Data.Chatlog.ShowTeamChat && (RustChannelType)msg.Channel == RustChannelType.Team) 
+                    return;
+
+                _messageQueue.Enqueue(embedBuilder.Build());
             }
             catch (Exception e)
             {
@@ -138,11 +258,14 @@ namespace DiscordBot
             {
                 if (ServerInfoMessage == null)
                 {
-                    Bot.GetCurrentGuild();
-
                     if (ServerInfoEmbedChannel == null)
                     {
-                        ServerInfoEmbedChannel = await CurrentGuild.GetTextChannelAsync(Data.Discord.ServerInfoChannelID);
+                        ServerInfoEmbedChannel = await CurrentGuild.GetTextChannelAsync(Data.Serverinfo.ChannelId);
+                        if (ServerInfoEmbedChannel == null)
+                        {
+                            Log.Warning("Unable to find the server info channel!");
+                            return;
+                        }
                     }
                     var messages = await ServerInfoEmbedChannel.GetMessagesAsync(10).FlattenAsync();
                     foreach (var message in messages)
@@ -156,8 +279,8 @@ namespace DiscordBot
                 
                 var embedBuilder = new EmbedBuilder();
                                
-                embedBuilder.WithTitle(string.Format(Data.Localization.EmbedTitle, Region, serverInfo.Hostname));
-                embedBuilder.WithUrl(Data.Settings.ServerInfoEmbedLink);
+                embedBuilder.WithTitle(string.Format(Data.Localization.EmbedTitle, _region, serverInfo.Hostname));
+                embedBuilder.WithUrl(Data.Serverinfo.EmbedLink);
                 embedBuilder.WithDescription(string.Format(Data.Localization.EmbedDescription, Data.Rcon.ServerIP, Data.Rcon.ServerPort));
                 
                 var fields = new List<EmbedFieldBuilder>
@@ -191,17 +314,17 @@ namespace DiscordBot
                         Name = Data.Localization.EmbedFieldUptime.EmbedName,
                         Value = string.Format(Data.Localization.EmbedFieldUptime.EmbedValue, TimeSpan.FromSeconds(serverInfo.Uptime)),
                         IsInline = Data.Localization.EmbedFieldUptime.EmbedInline
-                    }
+                    },                
                 };
 
-                if (!string.IsNullOrEmpty(ServerSeed) &&
-                    !string.IsNullOrEmpty(ServerWorldSize))
+                if (!string.IsNullOrEmpty(_serverSeed) &&
+                    !string.IsNullOrEmpty(_serverWorldSize))
                 {
                     string mapLink = string.Empty;
                     if (serverInfo.Map == "Procedural Map")
-                        mapLink = $"http://playrust.io/map/?Procedural%20Map_{ServerWorldSize}_{ServerSeed}"; 
+                        mapLink = $"http://playrust.io/map/?Procedural%20Map_{_serverWorldSize}_{_serverSeed}"; 
                     else if (serverInfo.Map == "Barren")
-                        mapLink = $"http://playrust.io/map/?Barren_{ServerWorldSize}_{ServerSeed}";
+                        mapLink = $"http://playrust.io/map/?Barren_{_serverWorldSize}_{_serverSeed}";
 
                     if (!string.IsNullOrEmpty(mapLink))
                     {
@@ -226,7 +349,7 @@ namespace DiscordBot
                     Text = string.Format(Data.Localization.EmbedFooter, footer)
                 });
 
-                embedBuilder.WithColor(Data.Settings.ServerInfoEmbedColor.Red, Data.Settings.ServerInfoEmbedColor.Green, Data.Settings.ServerInfoEmbedColor.Blue);
+                embedBuilder.WithColor(Data.Serverinfo.EmbedColor.Red, Data.Serverinfo.EmbedColor.Green, Data.Serverinfo.EmbedColor.Blue);
 
                 if (ServerInfoMessage == null)
                 {
@@ -248,14 +371,84 @@ namespace DiscordBot
             }
         }
 
+        public async Task OnDiscordCommand(SocketMessage msg)
+        {
+            var guildUser = msg.Author as IGuildUser;
+            var allUserRoles = new List<ulong>(guildUser.RoleIds);
+
+            if (!IsConnected)
+            {
+                await msg.Channel.SendMessageAsync("Server was unable to be reached.");
+                return;
+            }
+
+            string fullCommand = msg.Content.Remove(0, 1);
+            var cmdArgs = fullCommand.Split(' ');
+
+            if (cmdArgs.Length < 1)
+                return;
+
+            var cmd = cmdArgs[0];
+            var args = cmdArgs.Skip(1).ToArray();
+
+            switch (cmd)
+            {
+                default:
+                    {
+                        if (!Bot.HasEqualValue<ulong>(Data.Chatlog.CanUseCommandsRoleIds, allUserRoles))
+                        {
+                            await msg.Channel.SendMessageAsync("Missing permissions to use commands.");
+                            return;
+                        }
+
+                        SendDiscordCommand(fullCommand);
+                        break;
+                    }
+            }
+        }
+
+        public async Task OnDiscordMessage(SocketMessage msg)
+        {
+            var rMsg = (RestUserMessage)await msg.Channel.GetMessageAsync(msg.Id);
+            await rMsg.AddReactionAsync(new Emoji("✅"));
+
+            _chatLogAwaitingMessages.Add(msg.Id);
+        }
+
+        public async Task OnReactionAdded(SocketReaction reaction, IUserMessage msg)
+        {
+            if (!_chatLogAwaitingMessages.Contains(msg.Id)) 
+                return;
+
+            if (!IsConnected)
+            {
+                await msg.Channel.SendMessageAsync("Server was unable to be reached.");
+                return;
+            }
+            
+            _chatLogAwaitingMessages.Remove(msg.Id);
+
+            SendDiscordMessage(msg.Author.Id, msg.Content,
+                msg.Author.Username);
+
+            Log.Debug(msg.Content, Client);
+        }
+
+        #endregion
+
+        #region Helpers
+
         public async Task GetRegion()
         {
-            if (!Data.Settings.GetServerRegion) return;
-            if (!string.IsNullOrEmpty(Region)) return;
+            if (!Data.Serverinfo.GetServerRegion) 
+                return;
+
+            if (!string.IsNullOrEmpty(_region)) 
+                return;
 
             try
             {
-                var response = await HttpClient.GetAsync($"https://ipinfo.io/{Data.Rcon.ServerIP}/country");
+                var response = await _httpClient.GetAsync($"https://ipinfo.io/{Data.Rcon.ServerIP}/country");
                 if (!response.IsSuccessStatusCode)
                 {
                     Log.Debug("Region request failed : Code " + response.StatusCode, Client);
@@ -266,7 +459,7 @@ namespace DiscordBot
                 string final = Regex.Replace(region.ToLower(), @"\t|\n|\r", string.Empty);
 
                 Log.Debug("Received region : " + final, Client);
-                Region = $":flag_{final}:";
+                _region = $":flag_{final}:";
             }
             catch (Exception e)
             {
@@ -274,12 +467,47 @@ namespace DiscordBot
             }
         }
 
+        public async Task<string> GetAvatarlink(ulong userId)
+        {
+            string avatarLink = string.Empty;
+
+            if (userId == 0)
+                return avatarLink;
+
+            if (!_steamAvatars.TryGetValue(userId, out avatarLink))
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(Program.Data.SteamAPIKey))
+                        return avatarLink;
+
+                    var response = await _httpClient.GetStringAsync(
+                        $"http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={Program.Data.SteamAPIKey}&steamids={userId}");
+
+                    var json = JsonConvert.DeserializeObject<SteamRootObject>(response);
+                    _steamAvatars.Add(userId, avatarLink = json.Results.Players[0].Avatar);
+                }
+                catch (Exception e)
+                {
+                    avatarLink = string.Empty;
+                    Log.Error(e, Client);
+                }
+            }
+
+            return avatarLink;
+        }
+
         public void SendMessage(string message, PacketIdentifier identifier)
         {
             Packet packet = new Packet(message, (int)identifier);
             var msg = JsonConvert.SerializeObject(packet);
-            if (!IsConnected) return;
 
+            if (!IsConnected)
+            {
+                Log.Debug("Trying to send message but websocket not connected!", Client);
+                return;
+            }
+                
             WS.Send(msg);
         }
       
@@ -291,7 +519,8 @@ namespace DiscordBot
                 Log.Info("Websocket: Reconnecting...", Client);
                 try
                 {
-                    if (!IsConnected) WS.Connect(); 
+                    if (!IsConnected) 
+                        WS.Connect(); 
                 }
                 catch { }
             }
@@ -301,19 +530,79 @@ namespace DiscordBot
         {
             while (true)
             {
-                if (IsConnected) SendMessage("serverinfo", PacketIdentifier.ServerInfo);
-                else await Bot.SetStatus("Offline");
+                if (IsConnected) 
+                    SendMessage("serverinfo", PacketIdentifier.ServerInfo);
+                else 
+                    await Bot.SetStatus("Offline");
+
                 await Task.Delay(Program.Data.DiscordDelay * 1000);
             }
-        }        
-        
+        }
+
+        private readonly int _maxAmountOfMessagesPerEmbed = 10;
+
+        public async Task MessageDequeue()
+        {
+            Log.Info("Message dequeue process started!", Client);
+
+            while (true)
+            {
+                try
+                {
+                    int messagesToDequeueAmount = _messageQueue.Count;
+                    if (_messageQueue.Count > _maxAmountOfMessagesPerEmbed)
+                        messagesToDequeueAmount = _maxAmountOfMessagesPerEmbed;
+
+                    var embeds = new List<Embed>();
+                    for (int i = 0; i < messagesToDequeueAmount; i++)
+                    {
+                        embeds.Add(_messageQueue.Dequeue());
+                    }
+
+                    if (embeds.Count < 1)
+                        goto end;
+
+                    await Bot.ChatlogWebhookClient.SendMessageAsync(null, false, embeds);
+
+                    end:
+                    await Task.Delay(1000);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, Client);
+                }
+            }
+        }
+
         public void GetMapSize() =>
             SendMessage("worldsize", PacketIdentifier.WorldSize);
                 
         public void GetMapSeed() =>
             SendMessage("seed", PacketIdentifier.WorldSeed);
 
+        public void SendDiscordCommand(string cmd) 
+            => SendMessage(cmd, PacketIdentifier.DiscordCommand);        
+        
+        public void SendDiscordMessage(ulong discordUserId, string message, string username)
+        {
+            var steamId = Program.TryGetSteamId(discordUserId);
 
+            var msgContent = new ResponseMessage()
+            {
+                Channel = 0,
+                Content = message,
+                Username = username,
+                UserID = steamId,
+                Color = Data.Chatlog.DefaultNameColor,
+                Time = (uint)DateTime.UtcNow.Subtract(DateTime.UnixEpoch).TotalSeconds
+            };
+
+            message = JsonConvert.SerializeObject(msgContent);
+            message = "discordsay " + message;
+
+            SendMessage(message, PacketIdentifier.DiscordMessage);
+        }
+           
         #endregion
 
         #region Websocket Events
@@ -340,23 +629,47 @@ namespace DiscordBot
         {
             try
             {
-                if (!Bot.TryParseJson(args.Data, out ResponsePacket result)) return;
+                if (!Bot.TryParseJson(args.Data, out ResponsePacket result))
+                    return;
+
+                if (result == null)
+                    return;
+
+                Log.Debug("Received message with idenfitier : " + result.Identifier, Client);
+
                 switch (result.Identifier)
                 {
                     case (int)PacketIdentifier.ServerInfo:
                         {
-                            if (!Bot.TryParseJson(result.MessageContent, out ResponseServerInfo serverInfo)) return;
+                            if (!Bot.TryParseJson<ResponseServerInfo>(result.MessageContent, out var serverInfo))
+                                return;
                             await ProcessServerInfo(serverInfo);
                             break;
                         }                    
                     case (int)PacketIdentifier.WorldSeed:
                         {
-                            ServerSeed = Regex.Replace(Regex.Replace(result.MessageContent, "\\W", string.Empty), "[a-zA-Z]", string.Empty);
+                            _serverSeed = Regex.Replace(Regex.Replace(result.MessageContent, "\\W", string.Empty), "[a-zA-Z]", string.Empty);
                             break;
                         }                    
                     case (int)PacketIdentifier.WorldSize:
                         {
-                            ServerWorldSize = Regex.Replace(Regex.Replace(result.MessageContent, "\\W", string.Empty), "[a-zA-Z]" ,string.Empty);
+                            _serverWorldSize = Regex.Replace(Regex.Replace(result.MessageContent, "\\W", string.Empty), "[a-zA-Z]" ,string.Empty);
+                            break;
+                        }
+                    case (int)PacketIdentifier.DiscordCommand:
+                        {
+                            await ProcessCallback(result);
+                            break;
+                        }
+                    default:
+                        {                           
+                            if (!Bot.TryParseJson<ResponseMessage>(result.MessageContent, out var message))
+                                return;
+
+                            if (message  == null || message.Content.IsNullOrEmpty())
+                                return;
+                            
+                            await ProcessMessage(message);
                             break;
                         }
                 }                              

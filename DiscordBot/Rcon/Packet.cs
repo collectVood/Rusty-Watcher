@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace DiscordBot.Rcon
+namespace RustyWatcher.Rcon
 {
     public class Packet
     {

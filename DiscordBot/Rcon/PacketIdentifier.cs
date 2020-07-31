@@ -1,9 +1,11 @@
 ﻿
-namespace DiscordBot
+namespace RustyWatcher
 {
     public enum PacketIdentifier { 
         ServerInfo = 100, 
         WorldSeed,
-        WorldSize
+        WorldSize,
+        DiscordCommand,
+        DiscordMessage
     }
 }

@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace DiscordBot.Data
+namespace RustyWatcher.Data
 {
     public class RconDataFile
     {
@@ -8,9 +8,9 @@ namespace DiscordBot.Data
         public string ServerIP = string.Empty;
         [JsonProperty("Rcon Port")]
         public string RconPort = string.Empty;
-        [JsonProperty("Server Port")]
-        public string ServerPort = string.Empty;
         [JsonProperty("Rcon Password")]
         public string RconPW = string.Empty;
+        [JsonProperty("Server Port (Optional only used in ServerInfo Embed)")]
+        public string ServerPort = string.Empty;
     }
 }

@@ -1,7 +1,7 @@
 ﻿using System;
 using Discord.WebSocket;
 
-namespace DiscordBot
+namespace RustyWatcher
 {
     internal class Log
     {
@@ -37,7 +37,8 @@ namespace DiscordBot
 
         public static void Error(Exception exception, DiscordSocketClient client = null)
         {
-            string output = $"[{DateTime.Now}] {GetName(client)} -  Error: " + exception.Message + " Stacktrace : " + exception.StackTrace;
+            string output = $"[{DateTime.Now}] {GetName(client)} -  Error: " + exception.Message + " Stacktrace : " + exception.StackTrace
+                + (exception.InnerException != null ? "\nInner Exception" + exception.InnerException.Message + " Stacktrace : " + exception.InnerException.StackTrace : string.Empty);
 
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine(output);

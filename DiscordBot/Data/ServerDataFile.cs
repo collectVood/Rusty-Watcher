@@ -1,15 +1,17 @@
 ﻿using Newtonsoft.Json;
 
-namespace DiscordBot.Data
+namespace RustyWatcher.Data
 {
     public class ServerDataFile
     {
         [JsonProperty("Discord")]
         public DiscordDataFile Discord = new DiscordDataFile();
         [JsonProperty("Rcon")]
-        public RconDataFile Rcon = new RconDataFile();        
-        [JsonProperty("Settings")]
-        public SettingsDataFile Settings = new SettingsDataFile();
+        public RconDataFile Rcon = new RconDataFile();
+        [JsonProperty("Chatlog")]
+        public ChatlogDataFile Chatlog = new ChatlogDataFile();
+        [JsonProperty("Serverinfo")]
+        public ServerInfoDataFile Serverinfo = new ServerInfoDataFile();
         [JsonProperty("Localization")]
         public LocalizationDataFile Localization = new LocalizationDataFile();
     }
