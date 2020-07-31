@@ -172,4 +172,7 @@ To allow for the steam icons to show in the chatlog you need to provide a Steam 
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
+## Credits
+
+- Big thanks go to Captain John Silver for making the icon
 
