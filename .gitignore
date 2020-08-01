@@ -3,3 +3,5 @@
 # But cs files
 !*.cs
 !*.md
+!*.sln
+!*.csproj
