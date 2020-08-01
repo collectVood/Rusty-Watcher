@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+	    <RuntimeIdentifiers>win-x64;linux-arm</RuntimeIdentifiers>
+	    <ApplicationIcon>rustywatcher.ico</ApplicationIcon>
+	    <AssemblyName>Rusty Watcher</AssemblyName>
+	    <RootNamespace>RustyWatcher</RootNamespace>
+	    <Win32Resource />
+	    <NoWin32Manifest>true</NoWin32Manifest>
+	    <StartupObject></StartupObject>
+	    <Authors>collect_vood</Authors>
+	    <Description>A discord bot which allows for watching and moderating your rust server over discord.</Description>
+	    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+	    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+	    <SignAssembly>false</SignAssembly>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="websocket-sharp">
+      <HintPath>..\..\..\websocket-sharp-master\websocket-sharp\bin\Debug\netstandard2.0\websocket-sharp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
