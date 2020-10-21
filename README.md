@@ -6,9 +6,17 @@ multiple connections at once and much more.
 
 ## Example
 
-![Server Info Message](https://i.imgur.com/4UkWPlD.png)
+![Bot Status](https://i.imgur.com/5LXohVU.jpg)
 
-![Chatlog Feature & Command](https://i.imgur.com/LyFsqBT.png)
+![Server Info Embed](https://i.imgur.com/i6Agbrt.jpeg)
+
+![Chatlog Chatting](https://i.imgur.com/S7JzBvY.jpg)
+![Chatlog Ingame](https://i.imgur.com/Elwp8hn.jpg)
+
+![Chatlog Messages #1](https://i.imgur.com/wGx6SKo.jpg)
+![Chatlog Messages #2](https://i.imgur.com/RQRceRB.jpeg)
+
+![Chatlog Commands](https://i.imgur.com/tYYgHNN.jpeg)
 
 ## Getting Started
 
