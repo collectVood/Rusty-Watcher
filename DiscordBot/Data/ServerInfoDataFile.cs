@@ -19,14 +19,4 @@ namespace RustyWatcher.Data
         [JsonProperty("Server info embed color (RGB)")]
         public RGB EmbedColor = new RGB();   
     }
-
-    public class RGB
-    {
-        [JsonProperty("Red")]
-        public int Red = 44;
-        [JsonProperty("Green")]
-        public int Green = 47;
-        [JsonProperty("Blue")]
-        public int Blue = 51;
-    }
 }

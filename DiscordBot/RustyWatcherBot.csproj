@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="2.2.0" />
+    <PackageReference Include="Facepunch.Steamworks" Version="2.3.3" />
   </ItemGroup>
 
   <ItemGroup>

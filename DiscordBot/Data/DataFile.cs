@@ -11,7 +11,7 @@ namespace RustyWatcher.Data
         public int ReconnectDelay = 10;        
         [JsonProperty("Create output file")]
         public bool CreateOutputfile = false;
-        [JsonProperty("Steam API Key")]
+        [JsonProperty("Steam API Key (for avatars)")]
         public string SteamAPIKey = string.Empty;
         [JsonProperty("Servers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
         public List<ServerDataFile> ServerData = new List<ServerDataFile> { new ServerDataFile() };

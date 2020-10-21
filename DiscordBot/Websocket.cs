@@ -24,13 +24,13 @@ namespace RustyWatcher
 
         public DiscordSocketClient Client => Bot.Client;
 
-        public bool StartupRequired = true;
-
         public IGuild CurrentGuild => Bot.CurrentGuild;
 
         public ITextChannel ServerInfoEmbedChannel = null;
 
         public IUserMessage ServerInfoMessage = null;
+
+        public readonly RequestOptions RequestMode = new RequestOptions() { RetryMode = RetryMode.AlwaysRetry, Timeout = 10 };
 
         #endregion
 
@@ -62,6 +62,14 @@ namespace RustyWatcher
 
         #endregion
 
+        #region Callback
+
+        public Dictionary<int, Action<ResponsePacket>> Callbacks = new Dictionary<int, Action<ResponsePacket>>();
+
+        private int _currentIdentifier = 1337;
+
+        #endregion
+
         #region Constructor
 
         public Websocket(Bot bot)
@@ -77,8 +85,6 @@ namespace RustyWatcher
 
         public async Task StartAsync()
         {
-            if (!StartupRequired) return;
-
             WS = new WebSocket($"ws://{Data.Rcon.ServerIP}:{Data.Rcon.RconPort}/{Data.Rcon.RconPW}");
 
             WS.Log.Output = (_, __) => { };
@@ -93,8 +99,6 @@ namespace RustyWatcher
                 WS.OnError += async (sender, e) => await OnError(sender, e);
 
                 WS.Connect();
-
-                StartupRequired = false;
 
                 _ = Task.Run(ServerInfo);
 
@@ -149,52 +153,6 @@ namespace RustyWatcher
             }
         }
 
-        public async Task ProcessCallback(ResponsePacket packet)
-        {
-            if (packet.MessageContent.Length < 1) 
-                return;
-
-            var embedList = new List<Embed>();
-            var embedBuilder = new EmbedBuilder();
-
-            if (packet.MessageContent.Length > 2000)
-            {
-                var splitText = packet.MessageContent.SplitInParts(2000);
-
-                for (int i = 0; i < splitText.Count(); i++)
-                {
-                    embedBuilder.WithAuthor("SERVER");
-
-                    embedBuilder.WithCurrentTimestamp();
-
-                    embedBuilder.WithFooter(i + "/" + (splitText.Count() - 1));
-
-                    embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.Red,
-                        Data.Chatlog.ServerMessageColour.Green, Data.Chatlog.ServerMessageColour.Blue);
-
-                    embedBuilder.WithDescription(splitText.ElementAt(i));
-
-                    embedList.Add(embedBuilder.Build());
-                }
-
-                await Bot.ChatlogWebhookClient.SendMessageAsync(null, false, embedList);
-                return;
-            }
-
-            embedBuilder.WithAuthor("SERVER");
-
-            embedBuilder.WithCurrentTimestamp();
-
-            embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.Red,
-                Data.Chatlog.ServerMessageColour.Green, Data.Chatlog.ServerMessageColour.Blue);
-
-            embedBuilder.WithDescription(packet.MessageContent);
-
-            embedList.Add(embedBuilder.Build());
-
-            await Bot.ChatlogWebhookClient.SendMessageAsync(null, false, embedList);
-        }
-
         public async Task ProcessMessage(ResponseMessage msg)
         {
             if (!Data.Chatlog.Use)
@@ -231,8 +189,7 @@ namespace RustyWatcher
 
                 if (msg.UserID == 0)
                 {
-                    embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.Red, 
-                        Data.Chatlog.ServerMessageColour.Green, Data.Chatlog.ServerMessageColour.Blue);
+                    embedBuilder.WithColor(Data.Chatlog.ServerMessageColour.ToColor());
                 }
 
                 var channel = (RustChannelType)msg.Channel;
@@ -256,6 +213,9 @@ namespace RustyWatcher
         {
             try
             {
+                if (CurrentGuild == null)
+                    return;
+
                 if (ServerInfoMessage == null)
                 {
                     if (ServerInfoEmbedChannel == null)
@@ -354,7 +314,7 @@ namespace RustyWatcher
                 if (ServerInfoMessage == null)
                 {
                     //Create message
-                    ServerInfoMessage = await ServerInfoEmbedChannel.SendMessageAsync(null, false, embedBuilder.Build());
+                    ServerInfoMessage = await ServerInfoEmbedChannel.SendMessageAsync(null, false, embedBuilder.Build(), RequestMode);
                 }
                 else
                 {
@@ -371,10 +331,16 @@ namespace RustyWatcher
             }
         }
 
-        public async Task OnDiscordCommand(SocketMessage msg)
+        public async Task OnDiscordCommand(SocketMessage msg, string cmd)
         {
             var guildUser = msg.Author as IGuildUser;
             var allUserRoles = new List<ulong>(guildUser.RoleIds);
+
+            if (!Bot.HasEqualValue<ulong>(Data.Chatlog.CanUseCommandsRoleIds, allUserRoles))
+            {
+                await msg.Channel.SendMessageAsync("Missing permissions to use commands.");
+                return;
+            }
 
             if (!IsConnected)
             {
@@ -382,29 +348,8 @@ namespace RustyWatcher
                 return;
             }
 
-            string fullCommand = msg.Content.Remove(0, 1);
-            var cmdArgs = fullCommand.Split(' ');
-
-            if (cmdArgs.Length < 1)
-                return;
-
-            var cmd = cmdArgs[0];
-            var args = cmdArgs.Skip(1).ToArray();
-
-            switch (cmd)
-            {
-                default:
-                    {
-                        if (!Bot.HasEqualValue<ulong>(Data.Chatlog.CanUseCommandsRoleIds, allUserRoles))
-                        {
-                            await msg.Channel.SendMessageAsync("Missing permissions to use commands.");
-                            return;
-                        }
-
-                        SendDiscordCommand(fullCommand);
-                        break;
-                    }
-            }
+            //var identifier = CurrentIdentifier++;
+            SendDiscordCommand(cmd, msg);
         }
 
         public async Task OnDiscordMessage(SocketMessage msg)
@@ -497,9 +442,9 @@ namespace RustyWatcher
             return avatarLink;
         }
 
-        public void SendMessage(string message, PacketIdentifier identifier)
+        public void SendMessage(string message, int identifier)
         {
-            Packet packet = new Packet(message, (int)identifier);
+            Packet packet = new Packet(message, identifier);
             var msg = JsonConvert.SerializeObject(packet);
 
             if (!IsConnected)
@@ -531,7 +476,7 @@ namespace RustyWatcher
             while (true)
             {
                 if (IsConnected) 
-                    SendMessage("serverinfo", PacketIdentifier.ServerInfo);
+                    SendMessage("serverinfo", (int)PacketIdentifier.ServerInfo);
                 else 
                     await Bot.SetStatus("Offline");
 
@@ -543,7 +488,7 @@ namespace RustyWatcher
 
         public async Task MessageDequeue()
         {
-            Log.Info("Message dequeue process started!", Client);
+            Log.Debug("Message dequeue process started!", Client);
 
             while (true)
             {
@@ -575,14 +520,28 @@ namespace RustyWatcher
         }
 
         public void GetMapSize() =>
-            SendMessage("worldsize", PacketIdentifier.WorldSize);
+            SendMessage("worldsize", (int)PacketIdentifier.WorldSize);
                 
         public void GetMapSeed() =>
-            SendMessage("seed", PacketIdentifier.WorldSeed);
+            SendMessage("seed", (int)PacketIdentifier.WorldSeed);
 
-        public void SendDiscordCommand(string cmd) 
-            => SendMessage(cmd, PacketIdentifier.DiscordCommand);        
-        
+        public void SendDiscordCommand(string cmd, SocketMessage msg = null)
+        {
+            if (msg != null)
+            {
+                _currentIdentifier++;
+
+                Callbacks.Add(_currentIdentifier, async (ResponsePacket packet) =>
+                {
+                    await HandleCallback(packet, msg.Channel);
+
+                    Callbacks.Remove(_currentIdentifier);
+                });
+            }
+
+            SendMessage(cmd, _currentIdentifier);
+        }
+
         public void SendDiscordMessage(ulong discordUserId, string message, string username)
         {
             var steamId = Program.TryGetSteamId(discordUserId);
@@ -600,9 +559,49 @@ namespace RustyWatcher
             message = JsonConvert.SerializeObject(msgContent);
             message = "discordsay " + message;
 
-            SendMessage(message, PacketIdentifier.DiscordMessage);
+            SendMessage(message, (int)PacketIdentifier.DiscordMessage);
         }
            
+        public async Task HandleCallback(ResponsePacket packet, 
+            ISocketMessageChannel channel)
+        {
+            var cleanContent = Regex.Replace(packet.MessageContent, @"<.+?>", string.Empty);
+            
+            var embedBuilder = new EmbedBuilder();
+            embedBuilder.WithAuthor("SERVER", Client?.CurrentUser?.GetAvatarUrl(), null);
+            embedBuilder.WithColor(Bot.Data.Chatlog.ServerMessageColour.ToColor());
+            embedBuilder.WithCurrentTimestamp();
+
+            if (cleanContent.Length > 2000)
+            {
+                var splitText = cleanContent.SplitInParts(2000);
+
+                for (int i = 0; i < splitText.Count(); i++)
+                {
+                    embedBuilder.WithFooter(i + "/" + (splitText.Count() - 1));
+
+                    var text = splitText.ElementAt(i);
+                    if (text.IsNullOrEmpty())
+                        continue;
+
+                    embedBuilder.WithDescription(text);
+
+                    await channel.SendMessageAsync(null, false, embedBuilder.Build(), RequestMode);
+
+                    await Task.Delay(1000);
+                }
+
+                return;
+            }
+
+            if (cleanContent.IsNullOrEmpty())
+                return;
+
+            embedBuilder.WithDescription(cleanContent);
+
+            await channel.SendMessageAsync(null, false, embedBuilder.Build(), RequestMode);
+        }
+
         #endregion
 
         #region Websocket Events
@@ -635,6 +634,12 @@ namespace RustyWatcher
                 if (result == null)
                     return;
 
+                if (Callbacks.ContainsKey(result.Identifier))
+                {
+                    Callbacks[result.Identifier].Invoke(result);
+                    return;
+                }
+
                 Log.Debug("Received message with idenfitier : " + result.Identifier, Client);
 
                 switch (result.Identifier)
@@ -658,7 +663,7 @@ namespace RustyWatcher
                         }
                     case (int)PacketIdentifier.DiscordCommand:
                         {
-                            await ProcessCallback(result);
+                            await HandleCallback(result, Bot.ChatlogChannel as ISocketMessageChannel);
                             break;
                         }
                     default:

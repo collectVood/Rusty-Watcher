@@ -29,7 +29,7 @@ namespace RustyWatcher
                     _currentGuild = Client.GetGuild(Data.Discord.GuildId);
 
                     if (_currentGuild == null || string.IsNullOrEmpty(_currentGuild.Name))
-                        Log.Warning("Unable to get current guild", Client);
+                        Log.Error("Unable to get current guild", Client);
                 }
 
                 return _currentGuild;
@@ -85,7 +85,7 @@ namespace RustyWatcher
             }
 
             Client.Log += OnLog;
-            Client.Ready += () => OnReady();
+            Client.Ready += OnReady;
             Client.Disconnected += OnDisconnected;
             Client.MessageReceived += OnMessage;
             Client.ReactionAdded += OnReactionAdded;
@@ -111,61 +111,102 @@ namespace RustyWatcher
             return Task.CompletedTask;
         }
 
-        private async Task OnReady()
+        private Task OnReady()
+        {
+            _ = Setup();
+
+            return Task.CompletedTask;
+        }
+
+        private Task OnMessage(SocketMessage msg)
+        {
+            if (msg.Author.IsBot)
+            {
+                return Task.CompletedTask;
+            }
+
+            int argPos = 0;
+            var message = msg as SocketUserMessage;
+
+            var prefixed = message.HasStringPrefix(Data.Chatlog.CommandPrefix, ref argPos) ||
+                message.HasMentionPrefix(Client.CurrentUser, ref argPos);
+
+            _ = ProcessMessage(msg, prefixed, argPos);
+
+            return Task.CompletedTask;
+        }
+
+        public Task OnReactionAdded(Cacheable<IUserMessage, ulong> cacheable, 
+            ISocketMessageChannel messageChannel, SocketReaction socketReaction)
+        {
+            if (socketReaction == null || !socketReaction.User.IsSpecified || socketReaction.User.Value.IsBot) 
+                return Task.CompletedTask;
+
+            _ = ProcessReactionAdd(cacheable, socketReaction);
+
+            return Task.CompletedTask;
+        }
+
+
+        #endregion
+
+        #region Methods
+
+        private async Task Setup()
         {
             if (Data.Serverinfo.ShowPlayerCountStatus)
+            {
                 await SetStatus("Connecting...");
-            else 
+            }
+            else
+            {
                 await Client.SetGameAsync(Data.Serverinfo.StatusMessage, null);
+            }
 
             if (Data.Chatlog.Use)
+            {
                 await GetChatlogChannel();
-           
-            if (Websocket == null) 
-                await new Websocket(this).StartAsync();
+            }
 
+            if (Websocket == null)
+            {
+                await new Websocket(this).StartAsync();
+            }
             else if (!Websocket.IsConnected)
             {
                 _ = Websocket.TryReconnect();
             }
         }
 
-        private async Task OnMessage(SocketMessage msg)
+        private async Task ProcessMessage(SocketMessage msg, bool prefixed, int argPos)
         {
-            if (msg.Channel == ChatlogChannel)
+            if (msg.Channel.Id == ChatlogChannel.Id && !prefixed)
             {
-                if (msg.Author.IsBot)
-                    return;
-
-                int argPos = 0;
-                var message = msg as SocketUserMessage;
-                if (message.HasStringPrefix(Data.Chatlog.CommandPrefix, ref argPos) ||
-                    message.HasMentionPrefix(Client.CurrentUser, ref argPos))
-                {
-                    await Websocket.OnDiscordCommand(msg);
-                    return;
-                }
-
                 await Websocket.OnDiscordMessage(msg);
+                return;
+            }
+
+            if (prefixed)
+            {
+                await Websocket.OnDiscordCommand(msg, msg.Content.TrimWhitespaces().Substring(argPos));
             }
         }
 
-        public async Task OnReactionAdded(Cacheable<IUserMessage, ulong> cacheable, ISocketMessageChannel messageChannel, SocketReaction socketReaction)
+        private async Task ProcessReactionAdd(Cacheable<IUserMessage, ulong> cacheable,
+            SocketReaction socketReaction)
         {
-            if (socketReaction == null || !socketReaction.User.IsSpecified || socketReaction.User.Value.IsBot) return;
-
             try
             {
                 var reactor = socketReaction.User.Value;
 
                 var msg = await cacheable.GetOrDownloadAsync();
-                if (msg == null) 
+                if (msg == null)
                     return;
 
-                if (socketReaction.Channel.Id == ChatlogChannel?.Id && 
+                if (socketReaction.Channel.Id == ChatlogChannel?.Id &&
                     socketReaction.Emote.Name == "✅")
                 {
-                    if (msg.Author.Id != socketReaction.UserId) 
+                    if (msg.Author.Id != socketReaction.UserId)
                         return;
 
                     await Websocket.OnReactionAdded(socketReaction, msg);
@@ -177,15 +218,11 @@ namespace RustyWatcher
             }
         }
 
-
-        #endregion
-
-        #region Methods
-
         public async Task SetStatus(string status)
         {
             if (status == _lastUpdateString) 
                 return;
+
             _lastUpdateString = status;
 
             if (Data.Serverinfo.ShowPlayerCountStatus)
@@ -257,7 +294,10 @@ namespace RustyWatcher
         public async Task GetChatlogChannel()
         {
             try
-            {                
+            {
+                if (CurrentGuild == null)
+                    return;
+
                 if (ChatlogChannel == null || string.IsNullOrEmpty(ChatlogChannel.Name))
                 {
                     ChatlogChannel = await CurrentGuild.GetTextChannelAsync(Data.Chatlog.ChannelId, CacheMode.AllowDownload, RequestMode);
