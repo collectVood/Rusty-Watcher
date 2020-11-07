@@ -354,6 +354,19 @@ namespace RustyWatcher
 
         public async Task OnDiscordMessage(SocketMessage msg)
         {
+            if (!Data.Chatlog.ChatlogConfirmation)
+            {
+                if (!IsConnected)
+                {
+                    await msg.Channel.SendMessageAsync("Server was unable to be reached.");
+                    return;
+                }
+
+                SendDiscordMessage(msg.Author.Id, msg.Content,
+                    msg.Author.Username);
+                return;
+            }
+
             var rMsg = (RestUserMessage)await msg.Channel.GetMessageAsync(msg.Id);
             await rMsg.AddReactionAsync(new Emoji("✅"));
 

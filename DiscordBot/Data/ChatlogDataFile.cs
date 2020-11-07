@@ -11,6 +11,8 @@ namespace RustyWatcher.Data
         public string WebhookUrl = string.Empty;
         [JsonProperty("Command Prefix")]
         public string CommandPrefix = "!";
+        [JsonProperty("Require Chatlog Confirmation")]
+        public bool ChatlogConfirmation = true;
         [JsonProperty("Chatlog Channel Id")]
         public ulong ChannelId = 0;
         [JsonProperty("Default Name Color (for send messages when no steamId provided)")]
