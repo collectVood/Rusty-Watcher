@@ -2,19 +2,30 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
 	    <RuntimeIdentifiers>win-x64;linux-arm</RuntimeIdentifiers>
 	    <ApplicationIcon>rustywatcher.ico</ApplicationIcon>
-	    <AssemblyName>Rusty Watcher</AssemblyName>
+	    <AssemblyName>RustyWatcher</AssemblyName>
 	    <RootNamespace>RustyWatcher</RootNamespace>
 	    <Win32Resource />
 	    <NoWin32Manifest>true</NoWin32Manifest>
 	    <StartupObject></StartupObject>
-	    <Authors>collect_vood</Authors>
+	    <Authors>Yannick Kreth Softwareentwicklung</Authors>
 	    <Description>A discord bot which allows for watching and moderating your rust server over discord.</Description>
 	    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 	    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 	    <SignAssembly>false</SignAssembly>
+	    <Nullable>enable</Nullable>
+	    <PackageId>RustyWatcher</PackageId>
+	    <PackageVersion>2.0.*</PackageVersion>
+	    <Title>RustyWatcher</Title>
+	    <Copyright>Yannick Kreth Softwareentwicklung</Copyright>
+	    <PackageProjectUrl>https://github.com/collectVood/Rusty-Watcher/</PackageProjectUrl>
+	    <PackageLicenseUrl>https://github.com/collectVood/Rusty-Watcher/blob/master/LICENSE.md</PackageLicenseUrl>
+	    <RepositoryUrl>https://github.com/collectVood/Rusty-Watcher/</RepositoryUrl>
+	    <IsPackable>false</IsPackable>
+	    <AssemblyVersion>2.0.*</AssemblyVersion>
+	    <FileVersion>2.0.*</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -22,13 +33,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Discord.Net" Version="2.3.0-dev-20201106.1" />
-    <PackageReference Include="Facepunch.Steamworks" Version="2.3.3" />
+    <PackageReference Include="Discord.Net" Version="3.3.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
+    <PackageReference Include="Serilog" Version="2.10.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="websocket-sharp">
-      <HintPath>..\..\..\websocket-sharp-master\websocket-sharp\bin\Debug\netstandard2.0\websocket-sharp.dll</HintPath>
+    <Folder Include="Models" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="websocket-sharp, Version=1.0.2.0, Culture=neutral, PublicKeyToken=5660b08a1845a91e">
+      <HintPath>..\references\websocket-sharp.dll</HintPath>
     </Reference>
   </ItemGroup>
 
