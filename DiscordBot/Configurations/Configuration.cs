@@ -10,18 +10,6 @@ public class Configuration
     [JsonProperty("Steam API Key (for avatars)")]
     public string SteamAPIKey = string.Empty;
     
-    [JsonProperty("Linking Endpoint")]
-    public string LinkingEndpoint = string.Empty;    
-    
-    [JsonProperty("Linking API Key")]
-    public string LinkingApiKey = string.Empty;
-
-    [JsonProperty("Main Guild Id")] 
-    public ulong GuildId;
-    
-    [JsonProperty("Nitro Role Id")] 
-    public ulong NitroRoleId;
-
     [JsonProperty("Update Delay (seconds)")]
     public int UpdateDelay = 15;
     
@@ -36,6 +24,10 @@ public class Configuration
     {
         { 0, 0 }
     };
+
+    [JsonProperty(
+        "Simple Link Configuration (REQUIRES: Simple Linking System Lone Design)")]
+    public SimpleLinkConfiguration SimpleLinkConfiguration = new();
 
     [JsonProperty("Logging", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public LogConfiguration LogConfiguration = new();
@@ -66,7 +58,7 @@ public class Configuration
         }
     }
 
-    public void Save()
+    private void Save()
     {
         File.WriteAllText(_configPath, JsonConvert.SerializeObject(this, Formatting.Indented));
     }

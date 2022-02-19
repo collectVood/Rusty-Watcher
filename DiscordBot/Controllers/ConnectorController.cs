@@ -91,9 +91,11 @@ public class Connector
         await _discordWorker.ProcessMessage(response);
     }   
     
-    public async Task ProcessJoinLeave(ResponseJoinLeave response)
+    public void ProcessJoin(ulong steamId)
     {
-        await _discordWorker.ProcessMessage(response);
+        _logger.Debug("{0} User {1} just joined.", GetName(), steamId);
+        
+        _discordWorker.ProcessMessage(steamId);
     }
 
     public void UpdateServerWorldSeed(string seed)

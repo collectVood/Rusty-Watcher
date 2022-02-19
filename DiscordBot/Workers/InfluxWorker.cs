@@ -61,7 +61,7 @@ public static class InfluxWorker
             Metrics.Write("server_netin", _metricsNetInData);
             Metrics.Write("server_netout", _metricsNetOutData);
 
-            Log.Debug("{0} Metrics write done", GetTag());
+            Log.Debug("{0} Metrics write done.", GetTag());
         }, null, delay, delay);
     }
 

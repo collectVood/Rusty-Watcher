@@ -26,6 +26,9 @@ public class RconWorker
     
     private readonly Dictionary<int, Action<ResponsePacket>> _awaitingCallback = new();
     private int _currentIdentifier = 1337;
+
+    private const string REGEX_MATCH_JOINED = @".+?joined \[.+?(?=\/)\/[0-9]{17}\]$";
+    private const string REGEX_MATCH_JOINED_STEAMID = @"[0-9]{17}";
     
     #endregion
     
@@ -105,17 +108,17 @@ public class RconWorker
         {
             if (!args.Data.TryParseJson(out ResponsePacket? result))
                 return;
-
+            
             if (result == null)
                 return;
-
+            
             if (_awaitingCallback.ContainsKey(result.Identifier))
             {
                 _awaitingCallback[result.Identifier].Invoke(result);
                 return;
             }
             
-            Log.Debug("{0} New Message with Identifier: " + result.Identifier, GetTag());
+            //Log.Debug("{0} New Message with Identifier: " + result.Identifier, GetTag());
 
             switch (result.Identifier)
             {
@@ -125,14 +128,6 @@ public class RconWorker
                         return;
                     
                     await _connector.ProcessServerInfo(serverInfo);
-                    break;
-                }    
-                case (int)PacketIdentifier.ServerJoinLeave:
-                {
-                    if (!result.MessageContent.TryParseJson<ResponseJoinLeave>(out var joinLeave) || joinLeave == null)
-                        return;
-                    
-                    await _connector.ProcessJoinLeave(joinLeave);
                     break;
                 }
                 case (int)PacketIdentifier.WorldSeed:
@@ -153,10 +148,18 @@ public class RconWorker
                     break;
                 }
                 default:
-                {                           
+                {
                     if (!result.MessageContent.TryParseJson<ResponseMessage>(out var message))
-                        return;
+                    {
+                        if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_JOINED))
+                        {
+                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_JOINED_STEAMID).Value;
+                            _connector.ProcessJoin(ulong.Parse(steamId));
+                        }
 
+                        return;
+                    }
+                    
                     if (message == null || message.Content.IsNullOrEmpty())
                         return;
                     

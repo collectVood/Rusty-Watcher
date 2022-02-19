@@ -419,40 +419,15 @@ public class DiscordWorker
         }
     }
     
-    public async Task ProcessMessage(ResponseJoinLeave joinLeave)
+    public void ProcessMessage(ulong steamId)
     {
-        var discordId = await GetDiscordId(joinLeave.UserId);
-        if (discordId == 0UL) // Not linked, remove group
-        {
-            if (joinLeave.Nitro)
-                _connector.SendCommandRcon($"o.usergroup remove {joinLeave.UserId} nitro", null);
-            
+        if (!Configuration.Instance.SimpleLinkConfiguration.Use)
             return;
-        }
-
-        var user = _client.GetGuild(Configuration.Instance.GuildId).GetUser(discordId);
-        if (user == null)
+        
+        _connector.SendCommandRcon($"o.show user {steamId}", response =>
         {
-            if (joinLeave.Nitro) // Failed to get user somehow? Not in the guild? Remove group
-                _connector.SendCommandRcon($"o.usergroup remove {joinLeave.UserId} nitro", null);
-
-            return;
-        }
-
-        var isActuallyNitro = false;
-        foreach (var role in user.Roles)
-        {
-            if (role.Id != Configuration.Instance.NitroRoleId)
-                continue;
-            
-            isActuallyNitro = true;
-            break;
-        }
-
-        if (joinLeave.Nitro && !isActuallyNitro) // expired? remove group
-            _connector.SendCommandRcon($"o.usergroup remove {joinLeave.UserId} nitro", null);
-        else if (isActuallyNitro) // not yet there, add group
-            _connector.SendCommandRcon($"o.usergroup add {joinLeave.UserId} nitro", null);
+            Task.Run(() => TryRoleSyncing(response, steamId));
+        });
     }
     
     public async Task SetStatus(string status, bool fail = false)
@@ -521,6 +496,8 @@ public class DiscordWorker
         {
             await _client.Rest.CreateGuildCommand(runSlashCommandBuilder.Build(), textChannel.GuildId);
             await _client.Rest.CreateGuildCommand(reconnectSlashCommandBuilder.Build(), textChannel.GuildId);
+            
+            _logger.Debug("{0} Registered Slash Commands for Guild {1}", GetTag(), textChannel.GuildId);
         }
         catch (Exception e)
         {
@@ -730,7 +707,8 @@ public class DiscordWorker
                 $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={Configuration.Instance.SteamAPIKey}&steamids={userId}");
 
             var json = JsonConvert.DeserializeObject<SteamRootObject>(response);
-            _steamAvatars.Add(userId, avatarLink = json.Results.Players[0].Avatar);
+            avatarLink = json.Results.Players[0].Avatar;
+            _steamAvatars[userId] = avatarLink;
         }
         catch (Exception e)
         {
@@ -741,18 +719,12 @@ public class DiscordWorker
         return avatarLink;
     }
     
-    private async Task<ulong> GetDiscordId(string steamId)
+    private async Task<ulong> GetDiscordId(ulong steamId)
     {
-        if (!ulong.TryParse(steamId, out var steamIdValue))
-        {
-            _logger.Warning("{0} Invalid SteamId Format in DiscordWorker.GetDiscordId()", GetTag());
-            return 0UL;
-        }
-        
         try
         {
             var response = await _httpClient.GetAsync(
-                $"{Configuration.Instance.LinkingEndpoint}&id={steamIdValue}&secret={Configuration.Instance.LinkingApiKey}");
+                $"{Configuration.Instance.SimpleLinkConfiguration.LinkingEndpoint}/api.php?action=findBySteam&id={steamId}&secret={Configuration.Instance.SimpleLinkConfiguration.LinkingApiKey}");
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warning("{0} Request failed DiscordId : Code {1}", GetTag(), response.StatusCode);
@@ -771,6 +743,44 @@ public class DiscordWorker
         {
             _logger.Error(e, "{0} Failed DiscordWorker.GetDiscordId()");
             return 0UL;
+        }
+    }
+    
+    private async Task TryRoleSyncing(ResponsePacket response, ulong steamId)
+    {
+        if (string.IsNullOrEmpty(response.MessageContent))
+            return;
+
+        var parts = response.MessageContent.Split(")' groups:\n"); // this should^TM split right where groups start
+        if (parts.Length != 2)
+        {
+            _logger.Warning("{0} Oxide Group Splitting failed.", GetTag());
+            return;
+        }
+
+        var groups = parts[1].Split(", ");
+        
+        var guild = _client.GetGuild(Configuration.Instance.SimpleLinkConfiguration.GuildId) as IGuild;
+        if (guild == null)
+        {
+            _logger.Error("{0} Failed to ProcessMessage as Guild was not found ({1})", GetTag(),
+                "Did you set the Main GuildId in the config?");
+            return;
+        }
+        
+        var user = await guild.GetUserAsync(await GetDiscordId(steamId));
+        foreach (var (roleId, groupName) in Configuration.Instance.SimpleLinkConfiguration.RoleSyncing)
+        {
+            if (user != null && user.RoleIds.Contains(roleId))
+            {
+                if (groups.Contains(groupName)) // already has group
+                    continue;
+                    
+                // give out group
+                _connector.SendCommandRcon($"o.usergroup add {steamId} {groupName}", null);
+            }
+            else if (groups.Contains(groupName)) // make sure to remove the group
+                _connector.SendCommandRcon($"o.usergroup remove {steamId} {groupName}", null);
         }
     }
     
