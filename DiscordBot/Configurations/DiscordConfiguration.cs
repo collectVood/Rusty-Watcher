@@ -11,9 +11,6 @@ public class DiscordConfiguration
     [JsonProperty("Activity type (0 = Playing, 1 = Streaming, 2 = Listening, 3 = Watching)")]
     public int ActivityType;
     
-    [JsonProperty("Discord refresh (seconds)")]
-    public int UpdateDelay = 30;
-    
     [JsonProperty(PropertyName = "Custom Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public List<CommandConfiguration> Commands = new() { 
         new CommandConfiguration() { DisplayName = "Raw", Name = string.Empty }, 

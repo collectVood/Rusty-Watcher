@@ -7,6 +7,7 @@ public enum PacketIdentifier
     WorldSeed,
     WorldSize,
     DiscordCommand,
-    DiscordMessage
+    DiscordMessage,
+    ServerJoinLeave
 }
 

@@ -10,13 +10,31 @@ public class Configuration
     [JsonProperty("Steam API Key (for avatars)")]
     public string SteamAPIKey = string.Empty;
     
+    [JsonProperty("Linking Endpoint")]
+    public string LinkingEndpoint = string.Empty;    
+    
+    [JsonProperty("Linking API Key")]
+    public string LinkingApiKey = string.Empty;
+
+    [JsonProperty("Main Guild Id")] 
+    public ulong GuildId;
+    
+    [JsonProperty("Nitro Role Id")] 
+    public ulong NitroRoleId;
+
+    [JsonProperty("Update Delay (seconds)")]
+    public int UpdateDelay = 15;
+    
+    [JsonProperty("Influx Database (for example for Grafana)")]
+    public InfluxDbConfiguration InfluxDbConfiguration = new InfluxDbConfiguration();
+    
     [JsonProperty("Servers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public List<ServerConfiguration> Servers = new() { new ServerConfiguration() };
     
     [JsonProperty("Staff Discord & SteamIds (Key: DiscordId; Value: SteamId)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public Dictionary<ulong, ulong> DiscordSteamIds = new()
     {
-        { 0, 0 },
+        { 0, 0 }
     };
 
     [JsonProperty("Logging", ObjectCreationHandling = ObjectCreationHandling.Replace)]

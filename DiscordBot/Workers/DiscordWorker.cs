@@ -6,8 +6,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Discord;
-using Discord.Rest;
-using Discord.Webhook;
 using Discord.WebSocket;
 using Newtonsoft.Json;
 using RustyWatcher.Configurations;
@@ -406,6 +404,7 @@ public class DiscordWorker
             var status = string.Format(_configuration.ServerInfo.PlayerStatus,
                 players, serverInfo.MaxPlayers, joining, queued);
             
+            InfluxWorker.AddData(_configuration.Name, serverInfo);
             await SetStatus(status);
 
             //Embed
@@ -418,6 +417,42 @@ public class DiscordWorker
         {
             _logger.Error(e, "{0} Failed DiscordWorker.ProcessMessage(ResponseServerInfo)", GetTag());
         }
+    }
+    
+    public async Task ProcessMessage(ResponseJoinLeave joinLeave)
+    {
+        var discordId = await GetDiscordId(joinLeave.UserId);
+        if (discordId == 0UL) // Not linked, remove group
+        {
+            if (joinLeave.Nitro)
+                _connector.SendCommandRcon($"o.usergroup remove {joinLeave.UserId} nitro", null);
+            
+            return;
+        }
+
+        var user = _client.GetGuild(Configuration.Instance.GuildId).GetUser(discordId);
+        if (user == null)
+        {
+            if (joinLeave.Nitro) // Failed to get user somehow? Not in the guild? Remove group
+                _connector.SendCommandRcon($"o.usergroup remove {joinLeave.UserId} nitro", null);
+
+            return;
+        }
+
+        var isActuallyNitro = false;
+        foreach (var role in user.Roles)
+        {
+            if (role.Id != Configuration.Instance.NitroRoleId)
+                continue;
+            
+            isActuallyNitro = true;
+            break;
+        }
+
+        if (joinLeave.Nitro && !isActuallyNitro) // expired? remove group
+            _connector.SendCommandRcon($"o.usergroup remove {joinLeave.UserId} nitro", null);
+        else if (isActuallyNitro) // not yet there, add group
+            _connector.SendCommandRcon($"o.usergroup add {joinLeave.UserId} nitro", null);
     }
     
     public async Task SetStatus(string status, bool fail = false)
@@ -704,6 +739,39 @@ public class DiscordWorker
         }
 
         return avatarLink;
+    }
+    
+    private async Task<ulong> GetDiscordId(string steamId)
+    {
+        if (!ulong.TryParse(steamId, out var steamIdValue))
+        {
+            _logger.Warning("{0} Invalid SteamId Format in DiscordWorker.GetDiscordId()", GetTag());
+            return 0UL;
+        }
+        
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"{Configuration.Instance.LinkingEndpoint}&id={steamIdValue}&secret={Configuration.Instance.LinkingApiKey}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.Warning("{0} Request failed DiscordId : Code {1}", GetTag(), response.StatusCode);
+                return 0UL;
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            responseContent = responseContent.Trim('"');
+
+            if (!ulong.TryParse(responseContent, out var discordId)) 
+                discordId = 0UL;
+
+            return discordId;
+        }
+        catch (Exception e)
+        {
+            _logger.Error(e, "{0} Failed DiscordWorker.GetDiscordId()");
+            return 0UL;
+        }
     }
     
     #endregion

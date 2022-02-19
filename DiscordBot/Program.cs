@@ -3,6 +3,7 @@ using System.IO;
 using RustyWatcher.Configurations;
 using RustyWatcher.Controllers;
 using RustyWatcher.Helpers;
+using RustyWatcher.Workers;
 using Serilog;
 using Serilog.Sinks.SystemConsole.Themes;
 
@@ -38,6 +39,7 @@ namespace RustyWatcher
             Log.Information("Log Level: {0}", _logConfiguration.LevelLogging);
         
             Connector.StartAll();
+            InfluxWorker.Start();
             
             Console.ReadKey();
         }

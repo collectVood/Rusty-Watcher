@@ -126,7 +126,15 @@ public class RconWorker
                     
                     await _connector.ProcessServerInfo(serverInfo);
                     break;
-                }                    
+                }    
+                case (int)PacketIdentifier.ServerJoinLeave:
+                {
+                    if (!result.MessageContent.TryParseJson<ResponseJoinLeave>(out var joinLeave) || joinLeave == null)
+                        return;
+                    
+                    await _connector.ProcessJoinLeave(joinLeave);
+                    break;
+                }
                 case (int)PacketIdentifier.WorldSeed:
                 {
                     _connector.UpdateServerWorldSeed(Regex.Replace(
@@ -163,11 +171,14 @@ public class RconWorker
         }
     }
     
-    public bool SendCommand(string cmd, Action<ResponsePacket> callback)
+    public bool SendCommand(string cmd, Action<ResponsePacket>? callback)
     {
         _currentIdentifier++;
         
-        _awaitingCallback.Add(_currentIdentifier, callback.Invoke);
+        _awaitingCallback.Add(_currentIdentifier, response =>
+        {
+            callback?.Invoke(response);
+        });
         
         return SendMessage(cmd, _currentIdentifier);
     }
@@ -227,7 +238,7 @@ public class RconWorker
             else 
                 await _connector.UpdateStatusDiscord("Offline", true);
 
-            await Task.Delay(_connector.GetDiscordDelay() * 1000);
+            await Task.Delay(Configuration.Instance.UpdateDelay * 1000);
         }
     }
     

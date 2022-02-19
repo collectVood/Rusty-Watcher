@@ -63,7 +63,7 @@ public class Connector
     /// <param name="cmd"></param>
     /// <param name="channelId"></param>
     /// <returns></returns>
-    public bool SendCommandRcon(string cmd, Action<ResponsePacket> callback)
+    public bool SendCommandRcon(string cmd, Action<ResponsePacket>? callback)
     {
         return _rconWorker.SendCommand(cmd, callback);
     }
@@ -87,6 +87,11 @@ public class Connector
     }
     
     public async Task ProcessServerInfo(ResponseServerInfo response)
+    {
+        await _discordWorker.ProcessMessage(response);
+    }   
+    
+    public async Task ProcessJoinLeave(ResponseJoinLeave response)
     {
         await _discordWorker.ProcessMessage(response);
     }
@@ -113,11 +118,6 @@ public class Connector
     public string GetName()
     {
         return _configuration.Name;
-    }
-
-    public int GetDiscordDelay()
-    {
-        return _configuration.Discord.UpdateDelay;
     }
     
     #endregion
