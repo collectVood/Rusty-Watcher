@@ -4,6 +4,9 @@ namespace RustyWatcher.Configurations;
 
 public class InfluxDbConfiguration
 {
+    [JsonProperty("Use")] 
+    public bool Use;
+    
     [JsonProperty("Address")]
     public string Address = string.Empty;
 

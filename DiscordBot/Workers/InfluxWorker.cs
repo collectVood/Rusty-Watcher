@@ -24,12 +24,22 @@ public static class InfluxWorker
     private static readonly Dictionary<string, object> _metricsNetInData = new();
     private static readonly Dictionary<string, object> _metricsNetOutData = new();
     
+    private static Timer _metricsTimer;
+    
     #endregion
 
     #region Init
 
     public static void Start()
     {
+        if (!_configuration.Use)
+        {
+            Log.Information(
+                "{0} is currently disabled. This is an awesome feature great to combine with {1}, consider setting it up :)",
+                GetTag(), "https://grafana.com/");
+            return;
+        }
+        
         Metrics.Collector = new CollectorConfiguration()
                 .Tag.With("host", Environment.GetEnvironmentVariable("COMPUTERNAME"))
                 .Batch.AtInterval(TimeSpan.FromSeconds(2))
@@ -40,7 +50,7 @@ public static class InfluxWorker
 
         var delay = TimeSpan.FromSeconds(Configuration.Instance.UpdateDelay);
         
-        new Timer(_ =>
+        _metricsTimer = new Timer(_ =>
         {
             Metrics.Write("server_fps", _metricsFPSData);
             Metrics.Write("server_playercount", _metricsPlayersData);
@@ -51,6 +61,7 @@ public static class InfluxWorker
             Metrics.Write("server_netin", _metricsNetInData);
             Metrics.Write("server_netout", _metricsNetOutData);
 
+            Log.Debug("{0} Metrics write done", GetTag());
         }, null, delay, delay);
     }
 
@@ -59,7 +70,10 @@ public static class InfluxWorker
     #region Methods
 
     public static void AddData(string name, ResponseServerInfo serverInfo)
-    {
+    {        
+        if (!_configuration.Use)
+            return;
+        
         _metricsFPSData[name] = serverInfo.Framerate;
         _metricsCollectionsData[name] = serverInfo.Collections;
         

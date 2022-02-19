@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace RustyWatcher.Configurations;
 
@@ -18,18 +17,11 @@ public class ChatlogConfiguration
     public string DefaultNameColor = "#af5";
     
     [JsonProperty("Server Message Colour (RGB)")]
-    
     public RGBConfiguration ServerMessageColour = new()
     { 
         Red = 255, 
         Blue = 0, 
         Green = 0
-    };
-    
-    [JsonProperty("Can Use Commands Role Ids", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-    public List<ulong> CanUseCommandsRoleIds = new() 
-    { 
-        0, 0
     };
     
     [JsonProperty("Show team chat")]
