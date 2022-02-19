@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Discord.WebSocket;
 using Newtonsoft.Json;
 using RustyWatcher.Configurations;
 using RustyWatcher.Controllers;
@@ -164,14 +163,11 @@ public class RconWorker
         }
     }
     
-    public bool SendCommand(string cmd, ulong channelId, Action<ResponsePacket, ulong> callback)
+    public bool SendCommand(string cmd, Action<ResponsePacket> callback)
     {
         _currentIdentifier++;
         
-        _awaitingCallback.Add(_currentIdentifier, response =>
-        {
-            callback.Invoke(response, channelId);
-        });
+        _awaitingCallback.Add(_currentIdentifier, callback.Invoke);
         
         return SendMessage(cmd, _currentIdentifier);
     }
@@ -249,6 +245,14 @@ public class RconWorker
             }
             catch { }
         }
+    }
+
+    public void ForceReconnect()
+    {
+        if (_isConnected)
+            _webSocket.Close(); // results in TryReconnect call
+        else
+            Task.Run(TryReconnect);
     }
 
     #endregion

@@ -6,19 +6,13 @@ namespace RustyWatcher.Configurations;
 public class ChatlogConfiguration
 {
     [JsonProperty("Use Chatlog")]
-    public bool Use = false;
-    
-    [JsonProperty("Chatlog Webhook Url")]
-    public string WebhookUrl = string.Empty;
-    
-    [JsonProperty("Command Prefix")]
-    public string CommandPrefix = "!";
+    public bool Use;
     
     [JsonProperty("Require Chatlog Confirmation")]
     public bool ChatlogConfirmation = true;
     
     [JsonProperty("Chatlog Channel Id")]
-    public ulong ChannelId = 0;
+    public ulong ChannelId;
     
     [JsonProperty("Default Name Color (for send messages when no steamId provided)")]
     public string DefaultNameColor = "#af5";

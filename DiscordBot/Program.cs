@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Reflection;
 using RustyWatcher.Configurations;
 using RustyWatcher.Controllers;
 using RustyWatcher.Helpers;
@@ -31,9 +30,8 @@ namespace RustyWatcher
                     rollingInterval: RollingInterval.Day, restrictedToMinimumLevel: _logConfiguration.LevelLogging);
             
             Log.Logger = logConfiguration.CreateLogger();
-
-            var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version;
-            var startupString = $"RustyWatcher v({assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}) made by collect_vood#3773";
+            
+            var startupString = $"RustyWatcher {Utilities.GetVersionString()} made by collect_vood#3773";
             Console.Title = startupString;
             Log.Information(startupString);
             

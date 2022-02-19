@@ -2,12 +2,10 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Discord;
-using Discord.Commands;
 using Discord.Rest;
 using Discord.Webhook;
 using Discord.WebSocket;
@@ -32,8 +30,6 @@ public class DiscordWorker
     private readonly DiscordSocketClient _client;
     private readonly HttpClient _httpClient = new();
     
-    private DiscordWebhookClient _webhookClient;
-
     #region Cached Stuff
     
     private readonly Emoji _tickEmoji = new("✅");
@@ -42,10 +38,15 @@ public class DiscordWorker
     private readonly Dictionary<ulong, string> _steamAvatars = new();
     private string _region;
     private string _lastUpdateString;
-    
+
+    private readonly Dictionary<int, CommandConfiguration> _identifierToCommand = new();
+
     #endregion
     
-    private const string FAILED_TO_SEND = "Unable to send to WebSocket (*make sure the server is connected*).";
+    private const string FAILED_TO_SEND = "⚡ Unable to send to WebSocket (*make sure the server is connected*).";
+    
+    private const string SLASH_RUN = "run";
+    private const string SLASH_RECONNECT = "reconnect";
     
     #endregion
     
@@ -62,26 +63,12 @@ public class DiscordWorker
             ConnectionTimeout = -1,
             DefaultRetryMode = RetryMode.AlwaysRetry
         });
-
-        InitializeWebhook();
         
         Task.Run(InitializeBot);
         Task.Run(ReceivedMessageDequeue);
     }
 
     #region Init
-
-    private void InitializeWebhook()
-    {
-        try
-        {
-            _webhookClient = new DiscordWebhookClient(_configuration.Chatlog.WebhookUrl, new DiscordRestConfig());
-        }
-        catch (Exception e)
-        {
-            _logger.Error(e, "{0} Failed to Initialize Webhook", GetTag());
-        }
-    }
     
     private async Task InitializeBot()
     {
@@ -100,6 +87,7 @@ public class DiscordWorker
         _client.Disconnected += OnDisconnected;
         _client.MessageReceived += OnMessageReceived;
         _client.ReactionAdded += OnReactionAdded;
+        _client.SlashCommandExecuted += OnSlashCommandExecuted;
         
         await Task.Delay(-1);
     }
@@ -120,14 +108,8 @@ public class DiscordWorker
         {
             return Task.CompletedTask;
         }
-
-        var argPos = 0;
-        var msg = message as SocketUserMessage;
         
-        var prefixed = msg.HasStringPrefix(_configuration.Chatlog.CommandPrefix, ref argPos) ||
-                       msg.HasMentionPrefix(_client.CurrentUser, ref argPos);
-
-        _ = ProcessMessage(message, prefixed, argPos);
+        _ = ProcessMessage(message);
         return Task.CompletedTask;
     }
 
@@ -138,6 +120,8 @@ public class DiscordWorker
 
     private Task OnReady()
     {
+        Task.Run(SetupSlashCommands);
+        
         return Task.CompletedTask;
     }
 
@@ -151,47 +135,83 @@ public class DiscordWorker
         return Task.CompletedTask;
     }
 
+    private async Task OnSlashCommandExecuted(SocketSlashCommand command)
+    {
+        const string awaitingResponse = "⚙️ *Awaiting Response...*";
+        const string noPermissionsResponse = "⛔ **NO PERMISSIONS.**";
+        
+        switch (command.Data.Name)
+        {
+            case SLASH_RUN:
+            {
+                var commandType = (long)command.Data.Options.First().Value;
+                if (!_identifierToCommand.TryGetValue((int)commandType, out var commandConfiguration))
+                    return;
+
+                // Confirm if user has permissions to use
+                if (commandConfiguration.RolesIds != null && !command.User.HasAnyRole(commandConfiguration.RolesIds))
+                {
+                    await command.RespondAsync(noPermissionsResponse, null, false, true);
+                    return;
+                }
+                
+                var commandArguments = (string)command.Data.Options.ElementAt(1).Value;
+                commandArguments = string.IsNullOrEmpty(commandConfiguration.Name) ? commandArguments : commandConfiguration.Name + " " + commandArguments;
+                
+                _logger.Debug("{0} Slash Command Executed '{1}'", GetTag(), commandArguments);
+                
+                var success = _connector.SendCommandRcon(commandArguments,
+                    (response) =>
+                    {
+                        Task.Run(() => ProcessCommandRconCallback(response, command));
+                    });
+                
+                if (!success)
+                    await command.RespondAsync(FAILED_TO_SEND);
+                else
+                {
+                    await command.RespondAsync(awaitingResponse);
+                }
+                
+                break;
+            }
+            case SLASH_RECONNECT:
+            {
+                // Confirm if user has permissions to use
+                if (!command.User.HasAnyRole(_configuration.Discord.AdministrativeCommandRoleIds))
+                {
+                    await command.RespondAsync(noPermissionsResponse, null, false, true);
+                    return;
+                }
+                
+                await command.RespondAsync("✅️ **RECONNECTING**");
+                Task.Run(() => _connector.ReconnectRcon());
+                break;
+            }
+        }
+    }
+    
     #endregion
 
     #region Methods
 
-    private async Task ProcessMessage(SocketMessage message, bool prefixed, int argPos)
+    private async Task ProcessMessage(SocketMessage message)
     {
-        if (message.Channel.Id == _configuration.Chatlog.ChannelId && !prefixed)
+        if (message.Channel.Id != _configuration.Chatlog.ChannelId)
+            return;
+        
+        if (!_configuration.Chatlog.ChatlogConfirmation)
         {
-            if (!_configuration.Chatlog.ChatlogConfirmation)
-            {
-                var success = _connector.SendMessageRcon(message.Content, message.Author.Username, message.Author.Id);
-                if (!success)
-                    await message.Channel.SendMessageAsync(FAILED_TO_SEND);
+            var success = _connector.SendMessageRcon(message.Content, message.Author.Username, message.Author.Id);
+            if (!success)
+                await message.Channel.SendMessageAsync(FAILED_TO_SEND);
 
-                return;
-            }
-
-            // Queue up for once reaction is added
-            await message.AddReactionAsync(_tickEmoji);
-            _awaitingConfirmationMessages.Add(message.Id);
             return;
         }
 
-        if (prefixed) // Command here
-        {
-            // Missing perms
-            if (message.Author.HasAnyRole(_configuration.Chatlog.CanUseCommandsRoleIds))
-            {
-                await message.Channel.SendMessageAsync("Missing permissions to use commands.");
-                return;
-            }
-
-            var success = _connector.SendCommandRcon(message.Content.TrimWhitespaces().Substring(argPos), message.Channel.Id, 
-                (response, channelId) =>
-            { 
-                Task.Run(() => ProcessCommandRconCallback(response, channelId));
-            });
-
-            if (!success)
-                await message.Channel.SendMessageAsync(FAILED_TO_SEND);
-        }
+        // Queue up for once reaction is added
+        await message.AddReactionAsync(_tickEmoji);
+        _awaitingConfirmationMessages.Add(message.Id);
     }
 
     private async Task ProcessReactionAdded(Cacheable<IUserMessage, ulong> cacheableUser, Cacheable<IMessageChannel, ulong> cacheableChannel, 
@@ -219,10 +239,10 @@ public class DiscordWorker
         var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
 
         var embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor("SERVER", _client.CurrentUser.GetAvatarUrl() ?? null);
+        embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", _client.CurrentUser.GetAvatarUrl() ?? null);
         embedBuilder.WithColor(_configuration.Chatlog.ServerMessageColour.ToDiscordColor());
-        embedBuilder.WithCurrentTimestamp();
-
+        embedBuilder.WithCustomFooter();
+        
         var channel = await _client.GetChannelAsync(channelId);
         if (channel is not ITextChannel textChannel)
         {
@@ -257,6 +277,56 @@ public class DiscordWorker
         embedBuilder.WithDescription(cleanContent);
 
         await textChannel.SendMessageAsync(null, false, embedBuilder.Build());
+    }
+    
+    private async Task ProcessCommandRconCallback(ResponsePacket response, SocketSlashCommand command)
+    {
+        const string doneString = "✅️ **DONE**";
+        
+        var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
+
+        var embedBuilder = new EmbedBuilder();
+        embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", _client.CurrentUser.GetAvatarUrl() ?? null);
+        embedBuilder.WithColor(_configuration.Chatlog.ServerMessageColour.ToDiscordColor());
+        embedBuilder.WithCustomFooter();
+        
+        // Basic pagination
+        if (cleanContent.Length > 2000)
+        {
+            var splitText = cleanContent.SplitInParts(2000);
+            var embeds = new Embed[splitText.Length];
+            
+            for (int i = 0; i < splitText.Length; i++)
+            {
+                embedBuilder.WithFooter(i + "/" + (splitText.Length - 1));
+
+                var text = splitText[i];
+                if (string.IsNullOrEmpty(text))
+                    continue;
+
+                embedBuilder.WithDescription(text);
+                embeds[i] = embedBuilder.Build();
+            }
+            
+            await command.ModifyOriginalResponseAsync(properties =>
+            {
+                properties.Content = doneString;
+                properties.Embeds = embeds;
+            });
+            
+            return;
+        }
+
+        if (string.IsNullOrEmpty(cleanContent))
+            return;
+
+        embedBuilder.WithDescription(cleanContent);
+        
+        await command.ModifyOriginalResponseAsync(properties =>
+        {
+            properties.Content = doneString;
+            properties.Embed = embedBuilder.Build();
+        });
     }
 
     public async Task ProcessMessage(ResponseMessage msg)
@@ -378,6 +448,51 @@ public class DiscordWorker
     
     #region Helpers
 
+    private async Task SetupSlashCommands()
+    {
+        var typeBuilder = new SlashCommandOptionBuilder()
+            .WithName("type")
+            .WithDescription("Declare the type of command you want to run")
+            .WithRequired(true)
+            .WithType(ApplicationCommandOptionType.Integer);
+
+        var currentIdentifier = 1;
+        foreach (var customCommand in _configuration.Discord.Commands)
+        {
+            typeBuilder.AddChoice(customCommand.DisplayName, currentIdentifier);
+            _identifierToCommand[currentIdentifier] = customCommand;
+            
+            currentIdentifier++;
+        }
+        
+        var runSlashCommandBuilder = new SlashCommandBuilder()
+            .WithName(SLASH_RUN)
+            .WithDescription("Run a Command on the Server.")
+            .AddOption(typeBuilder)
+            .AddOption("arguments", ApplicationCommandOptionType.String, "The arguments for the Command", true);
+            
+        var channel = await _client.GetChannelAsync(_configuration.Chatlog.ChannelId);
+        if (channel is not ITextChannel textChannel)
+        {
+            _logger.Warning("{0} Failed to Setup Slash Command as Chatlog Channel was not found.", GetTag());
+            return;
+        }
+        
+        var reconnectSlashCommandBuilder = new SlashCommandBuilder()
+            .WithName(SLASH_RECONNECT)
+            .WithDescription("Reconnect to the WebSocket.");
+        
+        try
+        {
+            await _client.Rest.CreateGuildCommand(runSlashCommandBuilder.Build(), textChannel.GuildId);
+            await _client.Rest.CreateGuildCommand(reconnectSlashCommandBuilder.Build(), textChannel.GuildId);
+        }
+        catch (Exception e)
+        {
+            _logger.Error(e, "{0} Failed DiscordWorker.SetupSlashCommands()");
+        }
+    }
+    
     private async Task ReceivedMessageDequeue()
     {
         _logger.Debug("{0} Message dequeue process started!", GetTag());
@@ -401,7 +516,9 @@ public class DiscordWorker
                 if (embeds.Count < 1)
                     goto end;
 
-                await _webhookClient?.SendMessageAsync(null, false, embeds);
+                var chatlogChannel = await _client.GetChannelAsync(_configuration.Chatlog.ChannelId) as ITextChannel;
+                chatlogChannel?.SendMessageAsync(null, false, null, null, null, 
+                    null, null, null, embeds.ToArray());
                 
                 end:
                     await Task.Delay(1000);

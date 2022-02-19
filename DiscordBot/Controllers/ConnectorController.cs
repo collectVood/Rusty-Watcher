@@ -63,9 +63,17 @@ public class Connector
     /// <param name="cmd"></param>
     /// <param name="channelId"></param>
     /// <returns></returns>
-    public bool SendCommandRcon(string cmd, ulong channelId, Action<ResponsePacket, ulong> callback)
+    public bool SendCommandRcon(string cmd, Action<ResponsePacket> callback)
     {
-        return _rconWorker.SendCommand(cmd, channelId, callback);
+        return _rconWorker.SendCommand(cmd, callback);
+    }
+    
+    /// <summary>
+    /// Reconnect to the WebSocket
+    /// </summary>
+    public void ReconnectRcon()
+    {
+        _rconWorker.ForceReconnect();
     }
     
     public async Task ProcessMessageDiscord(ResponseMessage message)
