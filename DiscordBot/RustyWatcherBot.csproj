@@ -17,14 +17,14 @@
 	    <SignAssembly>false</SignAssembly>
 	    <Nullable>enable</Nullable>
 	    <PackageId>RustyWatcher</PackageId>
-	    <PackageVersion>2.0.0</PackageVersion>
+	    <PackageVersion>2.0.1</PackageVersion>
 	    <Title>RustyWatcher</Title>
 	    <Copyright>Yannick Kreth Softwareentwicklung</Copyright>
 	    <PackageProjectUrl>https://github.com/collectVood/Rusty-Watcher/</PackageProjectUrl>
 	    <PackageLicenseUrl>https://github.com/collectVood/Rusty-Watcher/blob/master/LICENSE.md</PackageLicenseUrl>
 	    <RepositoryUrl>https://github.com/collectVood/Rusty-Watcher/</RepositoryUrl>
 	    <IsPackable>false</IsPackable>
-	    <AssemblyVersion>2.0.0.1</AssemblyVersion>
+	    <AssemblyVersion>2.0.1.0</AssemblyVersion>
 	    <FileVersion>2.0.1</FileVersion>
   </PropertyGroup>
 
