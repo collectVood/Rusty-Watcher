@@ -93,9 +93,17 @@ public class Connector
     
     public void ProcessJoin(ulong steamId)
     {
-        _logger.Debug("{0} User {1} just joined.", GetName(), steamId);
+        _logger.Debug("{0} User {1} just joined.",  "[" + GetName() + "]", steamId);
         
         _discordWorker.ProcessMessage(steamId);
+        Task.Run(() => _discordWorker.JDLogEntry(steamId, true));
+    }    
+    
+    public void ProcessDisconnect(ulong steamId)
+    {
+        _logger.Debug("{0} User {1} just disconnected.",  "[" + GetName() + "]", steamId);
+
+        Task.Run(() => _discordWorker.JDLogEntry(steamId, false));
     }
 
     public void UpdateServerWorldSeed(string seed)

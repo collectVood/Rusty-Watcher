@@ -7,6 +7,9 @@ public class RconConfiguration
     [JsonProperty("Server IP")]
     public string ServerIP = string.Empty;
     
+    [JsonProperty("Server Direct IP")]
+    public string ServerDirectIP = string.Empty;
+    
     [JsonProperty("Rcon Port")]
     public string RconPort = string.Empty;
     

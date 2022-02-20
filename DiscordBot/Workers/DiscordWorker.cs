@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -33,7 +34,7 @@ public class DiscordWorker
     private readonly Emoji _tickEmoji = new("✅");
     private readonly List<ulong> _awaitingConfirmationMessages = new();
     private readonly Queue<Embed> _receivedMessageQueue = new();
-    private readonly Dictionary<ulong, string> _steamAvatars = new();
+    private readonly Dictionary<ulong, SteamPlayer?> _steamPlayers = new();
     private string _region;
     private string _lastUpdateString;
 
@@ -261,7 +262,7 @@ public class DiscordWorker
                 if (string.IsNullOrEmpty(text))
                     continue;
 
-                embedBuilder.WithDescription(text);
+                embedBuilder.WithDescription("```" + text + "```");
                 await textChannel.SendMessageAsync(null, false, embedBuilder.Build());
                 await Task.Delay(1000);
             }
@@ -272,7 +273,7 @@ public class DiscordWorker
         if (string.IsNullOrEmpty(cleanContent))
             return;
 
-        embedBuilder.WithDescription(cleanContent);
+        embedBuilder.WithDescription("```" + cleanContent + "```");
 
         await textChannel.SendMessageAsync(null, false, embedBuilder.Build());
     }
@@ -302,7 +303,7 @@ public class DiscordWorker
                 if (string.IsNullOrEmpty(text))
                     continue;
 
-                embedBuilder.WithDescription(text);
+                embedBuilder.WithDescription("```" + text + "```");
                 embeds[i] = embedBuilder.Build();
             }
             
@@ -318,7 +319,7 @@ public class DiscordWorker
         if (string.IsNullOrEmpty(cleanContent))
             return;
 
-        embedBuilder.WithDescription(cleanContent);
+        embedBuilder.WithDescription("```" + cleanContent + "```");
         
         await command.ModifyOriginalResponseAsync(properties =>
         {
@@ -337,7 +338,7 @@ public class DiscordWorker
         try
         {
             var embedBuilder = new EmbedBuilder();
-            var avatarLink = await GetAvatarLink(msg.UserID);
+            var avatarLink = (await GetSteamPlayer(msg.UserID))?.Avatar;
             embedBuilder.WithAuthor(msg.Username, avatarLink, msg.UserID != 0 ? $"https://steamcommunity.com/profiles/{msg.UserID}" : null);
 
             var message = msg.Content;
@@ -428,6 +429,24 @@ public class DiscordWorker
         {
             Task.Run(() => TryRoleSyncing(response, steamId));
         });
+    }
+
+    public async Task JDLogEntry(ulong steamId, bool join)
+    {
+        if (!_configuration.JDLog.Use)
+            return;
+
+        var steamPlayer = await GetSteamPlayer(steamId);
+        
+        var embedBuilder = new EmbedBuilder();
+        embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", steamPlayer?.Avatar ?? null);
+        embedBuilder.WithColor(_configuration.JDLog.EmbedColor.ToDiscordColor());
+        embedBuilder.WithCustomFooter();
+        embedBuilder.WithDescription(string.Format(
+            (join ? _configuration.JDLog.JoinFormat : _configuration.JDLog.LeaveFormat), steamPlayer?.PersonaName,
+            steamId));
+        
+        _receivedMessageQueue.Enqueue(embedBuilder.Build());
     }
     
     public async Task SetStatus(string status, bool fail = false)
@@ -609,11 +628,16 @@ public class DiscordWorker
             if (!string.IsNullOrEmpty(_configuration.ServerInfo.WorldSeed) &&
                 !string.IsNullOrEmpty(_configuration.ServerInfo.WorldSize))
             {
+                var mapLink = string.Empty;
+                if (serverInfo.Map == "Procedural Map")
+                    mapLink = $"https://rustmaps.com/map/{_configuration.ServerInfo.WorldSize}_{_configuration.ServerInfo.WorldSeed}"; 
+                else if (serverInfo.Map == "Barren")
+                    mapLink = $"https://rustmaps.com/map/barren/{_configuration.ServerInfo.WorldSize}_{_configuration.ServerInfo.WorldSeed}";
+            
                 fields.Add(new EmbedFieldBuilder()
                 {
                     Name = _configuration.Localization.EmbedFieldMap.EmbedName,
-                    Value = string.Format(_configuration.Localization.EmbedFieldMap.EmbedValue, 
-                        $"https://rustmaps.com/map/{_configuration.ServerInfo.WorldSize}_{_configuration.ServerInfo.WorldSeed}"),
+                    Value = string.Format(_configuration.Localization.EmbedFieldMap.EmbedValue, mapLink),
                     IsInline = _configuration.Localization.EmbedFieldUptime.EmbedInline
                 });
             }
@@ -669,7 +693,7 @@ public class DiscordWorker
 
         try
         {
-            var response = await _httpClient.GetAsync($"https://ipinfo.io/{_configuration.Rcon.ServerIP}/country");
+            var response = await _httpClient.GetAsync($"https://ipinfo.io/{_configuration.Rcon.ServerDirectIP}/country");
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Debug("{0} Region request failed : Code {1}", GetTag(), response.StatusCode);
@@ -688,35 +712,36 @@ public class DiscordWorker
         }
     }
     
-    private async Task<string> GetAvatarLink(ulong userId)
+    private async Task<SteamPlayer?> GetSteamPlayer(ulong userId)
     {
-        var avatarLink = string.Empty;
-
         if (userId == 0)
-            return avatarLink;
+            return null;
 
-        if (_steamAvatars.TryGetValue(userId, out avatarLink)) 
-            return avatarLink;
+        if (_steamPlayers.TryGetValue(userId, out var steamPlayer) && steamPlayer != null)
+            return steamPlayer;
         
         try
         {
             if (string.IsNullOrEmpty(Configuration.Instance.SteamAPIKey))
-                return avatarLink;
+            {
+                _logger.Warning("{0} Attempting to get SteamPlayer Data but no API Key was provided.", GetTag());
+                return null;
+            }
 
             var response = await _httpClient.GetStringAsync(
                 $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={Configuration.Instance.SteamAPIKey}&steamids={userId}");
 
             var json = JsonConvert.DeserializeObject<SteamRootObject>(response);
-            avatarLink = json.Results.Players[0].Avatar;
-            _steamAvatars[userId] = avatarLink;
+            var newSteamPlayer = json?.Results.Players.FirstOrDefault();
+            
+            _steamPlayers[userId] = newSteamPlayer; // Cache player body
+            return newSteamPlayer;
         }
         catch (Exception e)
         {
-            avatarLink = string.Empty;
-            _logger.Error(e, GetTag() + " DiscordWorker.GetAvatarLink()");
+            _logger.Error(e, GetTag() + " DiscordWorker.GetSteamPlayer()");
+            return null;
         }
-
-        return avatarLink;
     }
     
     private async Task<ulong> GetDiscordId(ulong steamId)
@@ -725,6 +750,10 @@ public class DiscordWorker
         {
             var response = await _httpClient.GetAsync(
                 $"{Configuration.Instance.SimpleLinkConfiguration.LinkingEndpoint}/api.php?action=findBySteam&id={steamId}&secret={Configuration.Instance.SimpleLinkConfiguration.LinkingApiKey}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound) // api actually returns this if no steamid found, so to avoid spam
+                return 0UL;
+            
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warning("{0} Request failed DiscordId : Code {1}", GetTag(), response.StatusCode);

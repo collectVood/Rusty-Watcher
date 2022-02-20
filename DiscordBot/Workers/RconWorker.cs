@@ -28,8 +28,11 @@ public class RconWorker
     private int _currentIdentifier = 1337;
 
     private const string REGEX_MATCH_JOINED = @".+?joined \[.+?(?=\/)\/[0-9]{17}\]$";
-    private const string REGEX_MATCH_JOINED_STEAMID = @"[0-9]{17}";
+    private const string REGEX_MATCH_JOINED_OPTIONAL = @".+?steamid [0-9]{17} joined";
+    private const string REGEX_MATCH_DISCONNECT = @"^[0-9]{17}.+?(?=disconnecting:).+";
     
+    private const string REGEX_MATCH_STEAMID = @"[0-9]{17}";
+
     #endregion
     
     public RconWorker(Connector connector, RconConfiguration configuration)
@@ -153,8 +156,19 @@ public class RconWorker
                     {
                         if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_JOINED))
                         {
-                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_JOINED_STEAMID).Value;
+                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_STEAMID).Value;
                             _connector.ProcessJoin(ulong.Parse(steamId));
+                        }
+                        else if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_JOINED_OPTIONAL)) 
+                        {
+                            // if new player basically, otherwise above gets called
+                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_STEAMID).Value;
+                            _connector.ProcessJoin(ulong.Parse(steamId));
+                        }                        
+                        else if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_DISCONNECT)) 
+                        {
+                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_STEAMID).Value;
+                            _connector.ProcessDisconnect(ulong.Parse(steamId));
                         }
 
                         return;

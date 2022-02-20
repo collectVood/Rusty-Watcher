@@ -14,7 +14,10 @@ public class ServerConfiguration
     public RconConfiguration Rcon = new();
     
     [JsonProperty("Chatlog")]
-    public ChatlogConfiguration Chatlog = new();
+    public ChatlogConfiguration Chatlog = new(); 
+    
+    [JsonProperty("Join/Disconnect Log")]
+    public JDLogConfiguration JDLog = new();
     
     [JsonProperty("Serverinfo")]
     public ServerInfoConfiguration ServerInfo = new();
