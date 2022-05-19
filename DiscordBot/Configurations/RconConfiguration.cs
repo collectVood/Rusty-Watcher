@@ -21,4 +21,7 @@ public class RconConfiguration
 
     [JsonProperty("Reconnect delay (seconds)")]
     public int ReconnectDelay = 10;
+    
+    [JsonProperty("Timeout Commands (seconds)")]
+    public int TimeoutCommands = 3;
 }

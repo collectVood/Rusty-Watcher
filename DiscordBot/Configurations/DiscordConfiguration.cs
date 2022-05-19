@@ -8,6 +8,9 @@ public class DiscordConfiguration
     [JsonProperty("Bot Token")]
     public string Token = string.Empty;   
     
+    [JsonProperty("Guild Id (required for guild only slash commands)")]
+    public ulong GuildId;  
+    
     [JsonProperty("Activity type (0 = Playing, 1 = Streaming, 2 = Listening, 3 = Watching)")]
     public int ActivityType;
     

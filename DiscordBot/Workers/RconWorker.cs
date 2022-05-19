@@ -24,7 +24,7 @@ public class RconWorker
     private readonly WebSocket _webSocket;
     private bool _isConnected => _webSocket.ReadyState == WebSocketState.Open && _webSocket.ReadyState != WebSocketState.Closed;
     
-    private readonly Dictionary<int, Action<ResponsePacket>> _awaitingCallback = new();
+    private readonly Dictionary<int, Action<ResponsePacket?>> _awaitingCallback = new();
     private int _currentIdentifier = 1337;
 
     private const string REGEX_MATCH_JOINED = @".+?joined \[.+?(?=\/)\/[0-9]{17}\]$";
@@ -115,9 +115,10 @@ public class RconWorker
             if (result == null)
                 return;
             
-            if (_awaitingCallback.ContainsKey(result.Identifier))
+            if (_awaitingCallback.TryGetValue(result.Identifier, out var responseAction) && !string.IsNullOrEmpty(result.MessageContent))
             {
-                _awaitingCallback[result.Identifier].Invoke(result);
+                responseAction.Invoke(result);
+                _awaitingCallback.Remove(result.Identifier);
                 return;
             }
             
@@ -188,14 +189,16 @@ public class RconWorker
         }
     }
     
-    public bool SendCommand(string cmd, Action<ResponsePacket>? callback)
+    public bool SendCommand(string cmd, Action<ResponsePacket?>? callback)
     {
         _currentIdentifier++;
         
-        _awaitingCallback.Add(_currentIdentifier, response =>
+        _awaitingCallback.Add(_currentIdentifier, (response) =>
         {
             callback?.Invoke(response);
         });
+
+        Task.Run(() => TriggerTimeoutAsync(_currentIdentifier));
         
         return SendMessage(cmd, _currentIdentifier);
     }
@@ -229,6 +232,17 @@ public class RconWorker
                 
         _webSocket.Send(msg);
         return true;
+    }
+
+    private async Task TriggerTimeoutAsync(int currentIdentifier)
+    {
+        await Task.Delay(_configuration.TimeoutCommands * 1000);
+
+        if (!_awaitingCallback.TryGetValue(currentIdentifier, out var responseAction))
+            return;
+        
+        responseAction.Invoke(null);
+        _awaitingCallback.Remove(currentIdentifier);
     }
     
     #endregion

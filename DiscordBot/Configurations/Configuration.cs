@@ -14,7 +14,10 @@ public class Configuration
     public int UpdateDelay = 15;
     
     [JsonProperty("Influx Database (for example for Grafana)")]
-    public InfluxDbConfiguration InfluxDbConfiguration = new InfluxDbConfiguration();
+    public InfluxDbConfiguration InfluxDbConfiguration = new ();
+
+    [JsonProperty("Global Server Bot")] 
+    public ServerGlobalConfiguration GlobalServerBot = new();
     
     [JsonProperty("Servers", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public List<ServerConfiguration> Servers = new() { new ServerConfiguration() };

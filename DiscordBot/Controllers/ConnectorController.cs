@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Discord;
 using RustyWatcher.Configurations;
 using RustyWatcher.Models.Rcon;
 using RustyWatcher.Workers;
@@ -14,6 +15,7 @@ public class Connector
 
     private static readonly ILogger _logger = Log.ForContext<Connector>();
     private static readonly List<Connector> _connectors = new();
+    private static DiscordGlobalWorker? _globalDiscordWorker;
 
     private readonly ServerConfiguration _configuration;
     private readonly DiscordWorker _discordWorker;
@@ -37,6 +39,11 @@ public class Connector
         
         foreach (var serverConfiguration in Configuration.Instance.Servers)
             _connectors.Add(new Connector(serverConfiguration));
+
+        if (!Configuration.Instance.GlobalServerBot.Enabled)
+            return;
+
+        _globalDiscordWorker = new DiscordGlobalWorker(_connectors, Configuration.Instance.GlobalServerBot);
     }
 
     #endregion
@@ -63,7 +70,7 @@ public class Connector
     /// <param name="cmd"></param>
     /// <param name="channelId"></param>
     /// <returns></returns>
-    public bool SendCommandRcon(string cmd, Action<ResponsePacket>? callback)
+    public bool SendCommandRcon(string cmd, Action<ResponsePacket?>? callback)
     {
         return _rconWorker.SendCommand(cmd, callback);
     }
@@ -128,6 +135,21 @@ public class Connector
     public string GetName()
     {
         return _configuration.Name;
+    }
+
+    public Color GetDiscordMessageColor()
+    {
+        return _discordWorker.GetDiscordMessageColor();
+    }
+
+    public string GetDiscordAvatarUrl()
+    {
+        return _discordWorker.GetDiscordAvatarUrl();
+    }
+    
+    public ResponseServerInfo? GetLastServerInfo()
+    {
+        return _discordWorker.GetLastServerInfo();
     }
     
     #endregion

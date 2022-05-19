@@ -37,6 +37,7 @@ public class DiscordWorker
     private readonly Dictionary<ulong, SteamPlayer?> _steamPlayers = new();
     private string _region;
     private string _lastUpdateString;
+    private ResponseServerInfo _lastServerInfoResponse;
 
     private readonly Dictionary<int, CommandConfiguration> _identifierToCommand = new();
 
@@ -168,9 +169,7 @@ public class DiscordWorker
                 if (!success)
                     await command.RespondAsync(FAILED_TO_SEND);
                 else
-                {
                     await command.RespondAsync(awaitingResponse);
-                }
                 
                 break;
             }
@@ -278,52 +277,61 @@ public class DiscordWorker
         await textChannel.SendMessageAsync(null, false, embedBuilder.Build());
     }
     
-    private async Task ProcessCommandRconCallback(ResponsePacket response, SocketSlashCommand command)
+    private async Task ProcessCommandRconCallback(ResponsePacket? response, SocketSlashCommand command)
     {
+        const string timedOutRcon = "```⚡ No response from the Server.```";
         const string doneString = "✅️ **DONE**";
-        
-        var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
+        const string timedOutString = "⚡️ **TIMED-OUT**";
 
         var embedBuilder = new EmbedBuilder();
         embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", _client.CurrentUser.GetAvatarUrl() ?? null);
         embedBuilder.WithColor(_configuration.Chatlog.ServerMessageColour.ToDiscordColor());
         embedBuilder.WithCustomFooter();
         
-        // Basic pagination
-        if (cleanContent.Length > 2000)
+        if (response == null)
         {
-            var splitText = cleanContent.SplitInParts(2000);
-            var embeds = new Embed[splitText.Length];
-            
-            for (int i = 0; i < splitText.Length; i++)
+            embedBuilder.WithDescription(timedOutRcon);
+        }
+        else
+        {
+            var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
+
+            // Basic pagination
+            if (cleanContent.Length > 2000)
             {
-                embedBuilder.WithFooter(i + "/" + (splitText.Length - 1));
+                var splitText = cleanContent.SplitInParts(2000);
+                var embeds = new Embed[splitText.Length];
+            
+                for (int i = 0; i < splitText.Length; i++)
+                {
+                    embedBuilder.WithFooter(i + "/" + (splitText.Length - 1));
 
-                var text = splitText[i];
-                if (string.IsNullOrEmpty(text))
-                    continue;
+                    var text = splitText[i];
+                    if (string.IsNullOrEmpty(text))
+                        continue;
 
-                embedBuilder.WithDescription("```" + text + "```");
-                embeds[i] = embedBuilder.Build();
+                    embedBuilder.WithDescription("```" + text + "```");
+                    embeds[i] = embedBuilder.Build();
+                }
+            
+                await command.ModifyOriginalResponseAsync(properties =>
+                {
+                    properties.Content = doneString;
+                    properties.Embeds = embeds;
+                });
+            
+                return;
             }
             
-            await command.ModifyOriginalResponseAsync(properties =>
-            {
-                properties.Content = doneString;
-                properties.Embeds = embeds;
-            });
-            
-            return;
+            if (string.IsNullOrEmpty(cleanContent))
+                return;
+
+            embedBuilder.WithDescription("```" + cleanContent + "```");
         }
-
-        if (string.IsNullOrEmpty(cleanContent))
-            return;
-
-        embedBuilder.WithDescription("```" + cleanContent + "```");
         
         await command.ModifyOriginalResponseAsync(properties =>
         {
-            properties.Content = doneString;
+            properties.Content = response == null ? timedOutString : doneString;
             properties.Embed = embedBuilder.Build();
         });
     }
@@ -405,6 +413,7 @@ public class DiscordWorker
             var status = string.Format(_configuration.ServerInfo.PlayerStatus,
                 players, serverInfo.MaxPlayers, joining, queued);
             
+            _lastServerInfoResponse = serverInfo;
             InfluxWorker.AddData(_configuration.Name, serverInfo);
             await SetStatus(status);
 
@@ -425,7 +434,7 @@ public class DiscordWorker
         if (!Configuration.Instance.SimpleLinkConfiguration.Use)
             return;
         
-        _connector.SendCommandRcon($"o.show user {steamId}", response =>
+        _connector.SendCommandRcon($"o.show user {steamId}", (response) =>
         {
             Task.Run(() => TryRoleSyncing(response, steamId));
         });
@@ -499,13 +508,6 @@ public class DiscordWorker
             .WithDescription("Run a Command on the Server.")
             .AddOption(typeBuilder)
             .AddOption("arguments", ApplicationCommandOptionType.String, "The arguments for the Command", true);
-            
-        var channel = await _client.GetChannelAsync(_configuration.Chatlog.ChannelId);
-        if (channel is not ITextChannel textChannel)
-        {
-            _logger.Warning("{0} Failed to Setup Slash Command as Chatlog Channel was not found.", GetTag());
-            return;
-        }
         
         var reconnectSlashCommandBuilder = new SlashCommandBuilder()
             .WithName(SLASH_RECONNECT)
@@ -513,10 +515,10 @@ public class DiscordWorker
         
         try
         {
-            await _client.Rest.CreateGuildCommand(runSlashCommandBuilder.Build(), textChannel.GuildId);
-            await _client.Rest.CreateGuildCommand(reconnectSlashCommandBuilder.Build(), textChannel.GuildId);
+            await _client.Rest.CreateGuildCommand(runSlashCommandBuilder.Build(), _configuration.Discord.GuildId);
+            await _client.Rest.CreateGuildCommand(reconnectSlashCommandBuilder.Build(), _configuration.Discord.GuildId);
             
-            _logger.Debug("{0} Registered Slash Commands for Guild {1}", GetTag(), textChannel.GuildId);
+            _logger.Debug("{0} Registered Slash Commands for Guild {1}", GetTag(), _configuration.Discord.GuildId);
         }
         catch (Exception e)
         {
@@ -775,9 +777,9 @@ public class DiscordWorker
         }
     }
     
-    private async Task TryRoleSyncing(ResponsePacket response, ulong steamId)
+    private async Task TryRoleSyncing(ResponsePacket? response, ulong steamId)
     {
-        if (string.IsNullOrEmpty(response.MessageContent))
+        if (response == null || string.IsNullOrEmpty(response.MessageContent))
             return;
 
         var parts = response.MessageContent.Split(")' groups:\n"); // this should^TM split right where groups start
@@ -811,6 +813,21 @@ public class DiscordWorker
             else if (groups.Contains(groupName)) // make sure to remove the group
                 _connector.SendCommandRcon($"o.usergroup remove {steamId} {groupName}", null);
         }
+    }
+
+    public Color GetDiscordMessageColor()
+    {
+        return _configuration.Chatlog.ServerMessageColour.ToDiscordColor();
+    }    
+    
+    public string GetDiscordAvatarUrl()
+    {
+        return _client.CurrentUser.GetAvatarUrl();
+    }
+
+    public ResponseServerInfo? GetLastServerInfo()
+    {
+        return _lastServerInfoResponse;
     }
     
     #endregion
