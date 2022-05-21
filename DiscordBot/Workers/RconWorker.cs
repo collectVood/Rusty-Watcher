@@ -24,7 +24,7 @@ public class RconWorker
     private readonly WebSocket _webSocket;
     private bool _isConnected => _webSocket.ReadyState == WebSocketState.Open && _webSocket.ReadyState != WebSocketState.Closed;
     
-    private readonly Dictionary<int, Action<ResponsePacket?>> _awaitingCallback = new();
+    private readonly Dictionary<int, Action<ResponsePacket?>?> _awaitingCallback = new();
     private int _currentIdentifier = 1337;
 
     private const string REGEX_MATCH_JOINED = @".+?joined \[.+?(?=\/)\/[0-9]{17}\]$";
@@ -117,7 +117,8 @@ public class RconWorker
             
             if (_awaitingCallback.TryGetValue(result.Identifier, out var responseAction) && !string.IsNullOrEmpty(result.MessageContent))
             {
-                responseAction.Invoke(result);
+                responseAction?.Invoke(result);
+                Log.Debug("{tag} New Callback Message with Identifier: {identifier}\nMessage: {message}", GetTag(), result.Identifier, result.MessageContent);
                 _awaitingCallback.Remove(result.Identifier);
                 return;
             }
@@ -193,6 +194,8 @@ public class RconWorker
     {
         _currentIdentifier++;
         
+        Log.Debug("Sending Command with Identifier {identifier}\nCommand: {command}", _currentIdentifier, cmd);
+        
         _awaitingCallback.Add(_currentIdentifier, (response) =>
         {
             callback?.Invoke(response);
@@ -241,7 +244,7 @@ public class RconWorker
         if (!_awaitingCallback.TryGetValue(currentIdentifier, out var responseAction))
             return;
         
-        responseAction.Invoke(null);
+        responseAction?.Invoke(null);
         _awaitingCallback.Remove(currentIdentifier);
     }
     

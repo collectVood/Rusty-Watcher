@@ -68,7 +68,7 @@ public class Connector
     /// Sends a Command to Rcon with Callback of the Command
     /// </summary>
     /// <param name="cmd"></param>
-    /// <param name="channelId"></param>
+    /// <param name="callback"></param>
     /// <returns></returns>
     public bool SendCommandRcon(string cmd, Action<ResponsePacket?>? callback)
     {
