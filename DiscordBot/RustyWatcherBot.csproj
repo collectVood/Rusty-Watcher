@@ -24,8 +24,8 @@
 	    <PackageLicenseUrl>https://github.com/collectVood/Rusty-Watcher/blob/master/LICENSE.md</PackageLicenseUrl>
 	    <RepositoryUrl>https://github.com/collectVood/Rusty-Watcher/</RepositoryUrl>
 	    <IsPackable>false</IsPackable>
-	    <AssemblyVersion>2.0.13.0</AssemblyVersion>
-	    <FileVersion>2.0.13</FileVersion>
+	    <AssemblyVersion>2.0.14.0</AssemblyVersion>
+	    <FileVersion>2.0.14</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
