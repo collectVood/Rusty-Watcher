@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using Discord;
 using RustyWatcher.Configurations;
 using RustyWatcher.Controllers;
 using RustyWatcher.Helpers;
@@ -14,6 +15,9 @@ namespace RustyWatcher
         private const string LOG_FOLDER = "Logs";
         private const string LOG_FILE = "log.txt";
 
+        public static readonly RequestOptions RetryAlwaysRequest = new()
+            {RetryMode = RetryMode.AlwaysRetry, Timeout = 5};
+        
         private static LogConfiguration _logConfiguration => Configuration.Instance.LogConfiguration;
         
         private static void Main()

@@ -32,7 +32,7 @@ public class ResponseServerInfo
     public string Map;
     
     [JsonProperty("Framerate")]
-    public string Framerate;
+    public float Framerate;
     
     [JsonProperty("Memory")]
     public int Memory;

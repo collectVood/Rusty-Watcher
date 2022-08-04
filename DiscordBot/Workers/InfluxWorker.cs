@@ -74,7 +74,7 @@ public static class InfluxWorker
         if (!_configuration.Use)
             return;
         
-        _metricsFPSData[name] = float.Parse(serverInfo.Framerate);
+        _metricsFPSData[name] = serverInfo.Framerate;
         _metricsCollectionsData[name] = serverInfo.Collections;
         
         _metricsPlayersData[name] = serverInfo.Players;

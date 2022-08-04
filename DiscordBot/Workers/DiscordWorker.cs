@@ -799,7 +799,11 @@ public class DiscordWorker
             return;
         }
         
-        var user = await guild.GetUserAsync(await GetDiscordId(steamId));
+        IGuildUser? user = null;
+        var discordId = await GetDiscordId(steamId);
+        if (discordId != 0)
+            user = await guild.GetUserAsync(discordId, CacheMode.AllowDownload, Program.RetryAlwaysRequest);
+        
         foreach (var (roleId, groupName) in Configuration.Instance.SimpleLinkConfiguration.RoleSyncing)
         {
             if (user != null && user.RoleIds.Contains(roleId))

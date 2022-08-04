@@ -52,8 +52,10 @@ public static class StringEx
     {
         try
         {
-            JsonSerializerSettings settings = new JsonSerializerSettings();
-            settings.MissingMemberHandling = MissingMemberHandling.Error;
+            var settings = new JsonSerializerSettings
+            {
+                MissingMemberHandling = MissingMemberHandling.Ignore
+            };
 
             result = JsonConvert.DeserializeObject<T>(obj, settings);
             return true;
