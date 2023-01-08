@@ -118,7 +118,7 @@ public class RconWorker
             if (_awaitingCallback.TryGetValue(result.Identifier, out var responseAction) && !string.IsNullOrEmpty(result.MessageContent))
             {
                 responseAction?.Invoke(result);
-                Log.Debug("{tag} New Callback Message with Identifier: {identifier}\nMessage: {message}", GetTag(), result.Identifier, result.MessageContent);
+                //Log.Debug("{tag} New Callback Message with Identifier: {identifier}\nMessage: {message}", GetTag(), result.Identifier, result.MessageContent);
                 _awaitingCallback.Remove(result.Identifier);
                 return;
             }
@@ -194,7 +194,7 @@ public class RconWorker
     {
         _currentIdentifier++;
         
-        Log.Debug("Sending Command with Identifier {identifier}\nCommand: {command}", _currentIdentifier, cmd);
+        //Log.Debug("Sending Command with Identifier {identifier}\nCommand: {command}", _currentIdentifier, cmd);
         
         _awaitingCallback.Add(_currentIdentifier, (response) =>
         {

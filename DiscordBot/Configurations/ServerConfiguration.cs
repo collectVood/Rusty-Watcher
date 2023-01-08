@@ -22,6 +22,12 @@ public class ServerConfiguration
     [JsonProperty("Serverinfo")]
     public ServerInfoConfiguration ServerInfo = new();
     
+    [JsonProperty("Population")]
+    public PopulationConfiguration Population = new();
+    
+    [JsonProperty("Balance")]
+    public BalancingConfiguration Balance = new();
+    
     [JsonProperty("Localization")]
     public LocalizationConfiguration Localization = new();
 }

@@ -26,7 +26,7 @@ public class ResponseServerInfo
     public string GameTime;
     
     [JsonProperty("Uptime")]
-    public int Uptime;
+    public double Uptime;
     
     [JsonProperty("Map")]
     public string Map;

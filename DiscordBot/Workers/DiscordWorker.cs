@@ -433,6 +433,12 @@ public class DiscordWorker
     {
         if (!Configuration.Instance.SimpleLinkConfiguration.Use)
             return;
+
+        if (Configuration.Instance.SimpleLinkConfiguration.ForceSync)
+        {
+            Task.Run(() => ForceRoleSyncing(steamId));
+            return;
+        }
         
         _connector.SendCommandRcon($"o.show user {steamId}", (response) =>
         {
@@ -460,6 +466,9 @@ public class DiscordWorker
     
     public async Task SetStatus(string status, bool fail = false)
     {
+        if (!_configuration.ServerInfo.ShowPlayerCountStatus)
+            status = _configuration.ServerInfo.StatusMessage;
+            
         if (status == _lastUpdateString) 
             return;
 
@@ -622,7 +631,7 @@ public class DiscordWorker
                 new()
                 {                        
                     Name = _configuration.Localization.EmbedFieldUptime.EmbedName,
-                    Value = string.Format(_configuration.Localization.EmbedFieldUptime.EmbedValue, TimeSpan.FromSeconds(serverInfo.Uptime)),
+                    Value = string.Format(_configuration.Localization.EmbedFieldUptime.EmbedValue, TimeSpan.FromSeconds(serverInfo.Uptime).ToString()),
                     IsInline = _configuration.Localization.EmbedFieldUptime.EmbedInline
                 },                
             };
@@ -803,22 +812,101 @@ public class DiscordWorker
         var discordId = await GetDiscordId(steamId);
         if (discordId != 0)
             user = await guild.GetUserAsync(discordId, CacheMode.AllowDownload, Program.RetryAlwaysRequest);
+
+        if (user == null)
+        {
+            // Always give linked role if player is linked
+            if (groups.Contains(Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame))
+            {
+                Log.Debug("Removing user {steamId} from linked group as not found on discord.", steamId);
+                _connector.SendCommandRcon($"o.usergroup remove {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+                _connector.SendCommandRcon($"pm {steamId} You were not found on our discord (discord.gg/rustreborn). Your in-game link status has been revoked. Rejoin the discord to receive it back.", null);
+            }
+            
+            Log.Debug("Not syncing roles for user {steamId} as not linked.", steamId);
+            return;
+        }
         
+        Log.Debug("Syncing roles for user {steamId} (Total {totalFound})", steamId, user.RoleIds.Count);
         foreach (var (roleId, groupName) in Configuration.Instance.SimpleLinkConfiguration.RoleSyncing)
         {
-            if (user != null && user.RoleIds.Contains(roleId))
+            if (user.RoleIds.Contains(roleId))
             {
                 if (groups.Contains(groupName)) // already has group
+                {
+                    Log.Debug("Skipping user {steamId} to group {groupName} as it already exists.", steamId, groupName);
                     continue;
+                }
                     
                 // give out group
+                Log.Debug("Adding user {steamId} to group {groupName}.", steamId, groupName);
                 _connector.SendCommandRcon($"o.usergroup add {steamId} {groupName}", null);
             }
             else if (groups.Contains(groupName)) // make sure to remove the group
+            {
+                Log.Debug("Removing user {steamId} from group {groupName}.", steamId, groupName);
                 _connector.SendCommandRcon($"o.usergroup remove {steamId} {groupName}", null);
+            }
+        }
+        
+        // Always give linked role if player is linked
+        if (!groups.Contains(Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame))
+        {
+            Log.Debug("Adding user {steamId} to linked group.", steamId);
+            _connector.SendCommandRcon($"o.usergroup add {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+            _connector.SendCommandRcon($"pm {steamId} Your accounts have been linked!", null);
         }
     }
 
+    private async Task ForceRoleSyncing(ulong steamId)
+    {
+        var guild = _client.GetGuild(Configuration.Instance.SimpleLinkConfiguration.GuildId) as IGuild;
+        if (guild == null)
+        {
+            _logger.Error("{0} Failed to ProcessMessage as Guild was not found ({1})", GetTag(),
+                "Did you set the Main GuildId in the config?");
+            return;
+        }
+        
+        IGuildUser? user = null;
+        var discordId = await GetDiscordId(steamId);
+        if (discordId != 0)
+            user = await guild.GetUserAsync(discordId, CacheMode.AllowDownload, Program.RetryAlwaysRequest);
+
+        if (user == null)
+        {
+            // Always give linked role if player is linked
+            //Log.Debug("Removing user {steamId} from linked group as not found on discord.", steamId);
+            //_connector.SendCommandRcon($"o.usergroup remove {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+            //_connector.SendCommandRcon($"pm {steamId} You were not found on our discord (discord.gg/rustreborn). Your in-game link status has been revoked. Rejoin the discord to receive it back.", null);
+            
+            Log.Debug("Not syncing roles for user {steamId} as not linked.", steamId);
+            return;
+        }
+        
+        Log.Debug("Syncing roles for user {steamId} (Total {totalFound})", steamId, user.RoleIds.Count);
+        foreach (var (roleId, groupName) in Configuration.Instance.SimpleLinkConfiguration.RoleSyncing)
+        {
+            if (user.RoleIds.Contains(roleId))
+            {
+                // give out group
+                Log.Debug("Adding user {steamId} to group {groupName}.", steamId, groupName);
+                _connector.SendCommandRcon($"o.usergroup add {steamId} {groupName}", null);
+            }
+            /*else // make sure to remove the group
+            {
+                Log.Debug("Removing user {steamId} from group {groupName}.", steamId, groupName);
+                _connector.SendCommandRcon($"o.usergroup remove {steamId} {groupName}", null);
+            }*/
+        }
+        
+        // Always give linked role if player is linked
+        Log.Debug("Adding user {steamId} to linked group.", steamId);
+        _connector.SendCommandRcon($"o.usergroup add {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+        //_connector.SendCommandRcon($"pm {steamId} Your accounts have been linked!", null);
+    
+    }
+    
     public Color GetDiscordMessageColor()
     {
         return _configuration.Chatlog.ServerMessageColour.ToDiscordColor();

@@ -20,6 +20,7 @@ public class Connector
     private readonly ServerConfiguration _configuration;
     private readonly DiscordWorker _discordWorker;
     private readonly RconWorker _rconWorker;
+    private readonly BalanceController? _balanceController;
 
     #endregion
     
@@ -29,6 +30,12 @@ public class Connector
         
         _discordWorker = new DiscordWorker(this, serverConfiguration);
         _rconWorker = new RconWorker(this, serverConfiguration.Rcon);
+
+        if (serverConfiguration.Balance.Use)
+            _balanceController = new BalanceController(this, _configuration.Balance);
+        
+        if (_configuration.Population.Enabled)
+            Task.Run(TryGrowth);
     }
 
     #region Init
@@ -96,6 +103,8 @@ public class Connector
     public async Task ProcessServerInfo(ResponseServerInfo response)
     {
         await _discordWorker.ProcessMessage(response);
+        
+        _balanceController?.AddFps(response.Framerate);
     }   
     
     public void ProcessJoin(ulong steamId)
@@ -150,6 +159,48 @@ public class Connector
     public ResponseServerInfo? GetLastServerInfo()
     {
         return _discordWorker.GetLastServerInfo();
+    }
+    
+    private async Task TryGrowth()
+    {
+        var delay = TimeSpan.FromSeconds(_configuration.Population.RefreshDelay);
+        
+        while (true)
+        {
+            await Task.Delay(delay);
+
+            var lastServerInfo = GetLastServerInfo();
+            if (lastServerInfo == null)
+            {
+                _logger.Warning("Serverinfo is null in TryGrowth() method. Skipping...");
+                continue;
+            }
+            
+            var totalPlayers = lastServerInfo.Queued + lastServerInfo.Joining + lastServerInfo.Players;
+            
+            int lastPresetKey = 0;
+            foreach (var slotPreset in _configuration.Population.DynamicPops)
+            {
+                if (totalPlayers >= slotPreset.Key)
+                {
+                    lastPresetKey = slotPreset.Key;
+                    continue;
+                }
+                
+                break;
+            }
+
+            var resultAmount = _configuration.Population.DynamicPops[lastPresetKey];
+            if (resultAmount == lastServerInfo.MaxPlayers)
+                continue;
+            
+            SendCommandRcon(
+                string.Format(_configuration.Population.RconCommand, resultAmount), response => 
+                {
+                    _logger.Information("Adjust pop response: {response}", response.MessageContent);
+                });
+        }
+
     }
     
     #endregion

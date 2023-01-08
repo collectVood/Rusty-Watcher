@@ -21,6 +21,7 @@ public static class InfluxWorker
     private static readonly Dictionary<string, object> _metricsPlayersQueuedData = new();
     private static readonly Dictionary<string, object> _metricsEntitiesData = new();
     private static readonly Dictionary<string, object> _metricsCollectionsData = new();
+    private static readonly Dictionary<string, object> _metricsAllocationsData = new();
     private static readonly Dictionary<string, object> _metricsNetInData = new();
     private static readonly Dictionary<string, object> _metricsNetOutData = new();
     
@@ -58,6 +59,7 @@ public static class InfluxWorker
             Metrics.Write("server_queuedcount", _metricsPlayersQueuedData);
             Metrics.Write("server_entities", _metricsEntitiesData);
             Metrics.Write("server_collections", _metricsCollectionsData);
+            Metrics.Write("server_memory", _metricsAllocationsData);
             Metrics.Write("server_netin", _metricsNetInData);
             Metrics.Write("server_netout", _metricsNetOutData);
 
@@ -76,6 +78,7 @@ public static class InfluxWorker
         
         _metricsFPSData[name] = serverInfo.Framerate;
         _metricsCollectionsData[name] = serverInfo.Collections;
+        _metricsAllocationsData[name] = serverInfo.Memory;
         
         _metricsPlayersData[name] = serverInfo.Players;
         _metricsPlayersJoiningData[name] = serverInfo.Joining;
