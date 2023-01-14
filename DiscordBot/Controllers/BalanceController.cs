@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Discord.Webhook;
 using RustyWatcher.Configurations;
 using Serilog;
@@ -89,7 +90,7 @@ public class BalanceController
         if (_webhook != null)
         {
             await _webhook.SendMessageAsync(
-                $"<@&708414690157658195> Lag Spike Detected.\nAvg Fps: `{avgFps}` - Spike Fps: `{spikeFps}` (*running spike commands*)");
+                $"<@&708414690157658195> Lag Spike Detected <t:{DateTimeOffset.Now.ToUnixTimeSeconds()}>.\nAvg Fps: `{avgFps}` - Spike Fps: `{spikeFps}` (*running spike commands*)");
         }
     }
 
@@ -109,7 +110,7 @@ public class BalanceController
         if (_webhook != null)
         {
             await _webhook.SendMessageAsync(
-                "Reset Spike (*ran restore commands*)");
+                $"Reset Spike <t:{DateTimeOffset.Now.ToUnixTimeSeconds()}> (*ran restore commands*)");
         }
     }
 }

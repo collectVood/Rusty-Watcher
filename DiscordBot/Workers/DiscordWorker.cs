@@ -328,6 +328,26 @@ public class DiscordWorker
 
             embedBuilder.WithDescription("```" + cleanContent + "```");
         }
+
+        var originalResponse = await command.GetOriginalResponseAsync();
+        if (originalResponse != null && originalResponse.Embeds.Count > 0)
+        {
+            var originalEmbedArray = originalResponse.Embeds.ToArray();
+            var embeds = new Embed[originalEmbedArray.Length + 1];
+            for (var i = 0; i < originalEmbedArray.Length; i++)
+                embeds[i] = originalEmbedArray[i];
+            
+            embeds[^1] = embedBuilder.Build(); // last index
+            
+            await command.ModifyOriginalResponseAsync(properties =>
+            {
+                properties.Content = response == null ? timedOutString : doneString;
+                properties.Embeds = embeds;
+                properties.Embed = null;
+            });
+            
+            return;
+        }
         
         await command.ModifyOriginalResponseAsync(properties =>
         {
