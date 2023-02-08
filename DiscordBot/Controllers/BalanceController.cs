@@ -90,7 +90,7 @@ public class BalanceController
         if (_webhook != null)
         {
             await _webhook.SendMessageAsync(
-                $"<@&708414690157658195> Lag Spike Detected <t:{DateTimeOffset.Now.ToUnixTimeSeconds()}>.\nAvg Fps: `{avgFps}` - Spike Fps: `{spikeFps}` (*running spike commands*)");
+                string.Format(_config.SpikeMessage, DateTimeOffset.Now.ToUnixTimeSeconds(), avgFps, spikeFps));
         }
     }
 
@@ -109,8 +109,7 @@ public class BalanceController
         
         if (_webhook != null)
         {
-            await _webhook.SendMessageAsync(
-                $"Reset Spike <t:{DateTimeOffset.Now.ToUnixTimeSeconds()}> (*ran restore commands*)");
+            await _webhook.SendMessageAsync(string.Format(_config.SpikeRevertMessage, DateTimeOffset.Now.ToUnixTimeSeconds()));
         }
     }
 }

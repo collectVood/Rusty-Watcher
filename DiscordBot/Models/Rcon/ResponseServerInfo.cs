@@ -41,10 +41,10 @@ public class ResponseServerInfo
     public int Collections;
     
     [JsonProperty("NetworkIn")]
-    public int NetworkIn;
+    public ulong NetworkIn;
     
     [JsonProperty("NetworkOut")]
-    public int NetworkOut;
+    public ulong NetworkOut;
     
     [JsonProperty("Restarting")]
     public bool Restarting;

@@ -16,7 +16,13 @@ public class BalancingConfiguration
     
     [JsonProperty("Spike Restoke Run Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)] 
     public string[] SpikeRestoreRunCommands = {"cba"};
+
+    [JsonProperty("Spike Message")] 
+    public string SpikeMessage = "<@&708414690157658195> Lag Spike Detected <t:{0}>.\nAvg Fps: `{1}` - Spike Fps: `{2}` (*running spike commands*)";
     
+    [JsonProperty("Spike Revert Message")] 
+    public string SpikeRevertMessage = "Reset Spike <t:{0}> (*ran restore commands*)";
+
     [JsonProperty("Spike Discord Webhook Url")] 
     public string SpikeDiscordWebhook = string.Empty;
 
