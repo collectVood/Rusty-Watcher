@@ -435,10 +435,10 @@ public class DiscordWorker
             
             _lastServerInfoResponse = serverInfo;
             InfluxWorker.AddData(_configuration.Name, serverInfo);
-            await SetStatus(status);
+            var successStatus = await SetStatus(status);
 
             //Embed
-            if (!_configuration.ServerInfo.ShowEmbed) 
+            if (!_configuration.ServerInfo.ShowEmbed || !successStatus) 
                 return;
             
             await UpdateOrCreateEmbed(serverInfo, status);
@@ -484,13 +484,13 @@ public class DiscordWorker
         _receivedMessageQueue.Enqueue(embedBuilder.Build());
     }
     
-    public async Task SetStatus(string status, bool fail = false)
+    public async Task<bool> SetStatus(string status, bool fail = false)
     {
         if (!_configuration.ServerInfo.ShowPlayerCountStatus)
             status = _configuration.ServerInfo.StatusMessage;
             
         if (status == _lastUpdateString) 
-            return;
+            return false;
 
         _lastUpdateString = status;
 
@@ -509,6 +509,8 @@ public class DiscordWorker
             await _client.SetGameAsync(_configuration.ServerInfo.StatusMessage, null,
                 Enum.Parse<ActivityType>(_configuration.Discord.ActivityType.ToString()));
         }
+
+        return true;
     }
     
     #endregion
