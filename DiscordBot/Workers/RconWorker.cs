@@ -196,16 +196,16 @@ public class RconWorker
         _currentIdentifier++;
         
         //Log.Debug("Sending Command with Identifier {identifier}\nCommand: {command}", _currentIdentifier, cmd);
-        
-        _awaitingCallback.Add(_currentIdentifier, (response) =>
-        {
-            callback?.Invoke(response);
-        });
 
-        _unrespondedCallback.Add(_currentIdentifier);
+        if (callback != null)
+        {
+            _awaitingCallback.Add(_currentIdentifier, callback.Invoke);
+
+            _unrespondedCallback.Add(_currentIdentifier);
         
-        Task.Run(() => TriggerTimeoutAsync(_currentIdentifier));
-        
+            Task.Run(() => TriggerTimeoutAsync(_currentIdentifier));
+        }
+
         return SendMessage(cmd, _currentIdentifier);
     }
     
