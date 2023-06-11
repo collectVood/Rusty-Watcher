@@ -37,6 +37,7 @@ public class DiscordWorker
     private readonly Dictionary<ulong, SteamPlayer?> _steamPlayers = new();
     private string _region;
     private string _lastUpdateString;
+    private UserStatus? _lastUserStatus;
     private ResponseServerInfo _lastServerInfoResponse;
 
     private readonly Dictionary<int, CommandConfiguration> _identifierToCommand = new();
@@ -496,11 +497,20 @@ public class DiscordWorker
 
         if (_configuration.ServerInfo.ShowPlayerCountStatus)
         {
-            if (fail) 
-                await _client.SetStatusAsync(UserStatus.DoNotDisturb);
-            else if (_client.Status != UserStatus.Online) 
-                await _client.SetStatusAsync(UserStatus.Online);
-
+            if (_lastUserStatus == null || fail && _lastUserStatus != UserStatus.DoNotDisturb || !fail && _lastUserStatus != UserStatus.Online)
+            {
+                if (fail)
+                {
+                    await _client.SetStatusAsync(UserStatus.DoNotDisturb);
+                    _lastUserStatus = UserStatus.DoNotDisturb;
+                }
+                else if (_client.Status != UserStatus.Online)
+                {
+                    await _client.SetStatusAsync(UserStatus.Online);
+                    _lastUserStatus = UserStatus.Online;
+                } 
+            }
+            
             await _client.SetGameAsync(status, null, Enum.Parse<ActivityType>(_configuration.Discord.ActivityType.ToString()));
         }
         else
@@ -691,6 +701,8 @@ public class DiscordWorker
                 _configuration.ServerInfo.EmbedColor.Blue);
             
             #endregion
+
+            await Task.Delay(5000);
             
             // Create New
             if (serverInfoMessage == null)
