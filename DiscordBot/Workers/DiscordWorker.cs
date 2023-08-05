@@ -772,7 +772,7 @@ public class DiscordWorker
         {
             if (string.IsNullOrEmpty(Configuration.Instance.SteamAPIKey))
             {
-                _logger.Warning("{0} Attempting to get SteamPlayer Data but no API Key was provided.", GetTag());
+                //_logger.Warning("{0} Attempting to get SteamPlayer Data but no API Key was provided.", GetTag());
                 return null;
             }
 
