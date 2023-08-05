@@ -23,6 +23,9 @@ public class SimpleLinkConfiguration
     [JsonProperty("Role Syncing (Key: Discord Role Id, Value: In-Game Group Name)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public Dictionary<ulong, string> RoleSyncing = new() { { 0, "default" }};
 
+    [JsonProperty("Usergroup Command (add/remove; steamId; groupName)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+    public string UserGroupCommand = "o.usergroup {0} {1} {2}";
+
     [JsonProperty("Linking Group In-Game")]
     public string LinkingGroupInGame = "linked";
 }

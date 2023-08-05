@@ -29,6 +29,8 @@ public class DiscordWorker
     private readonly DiscordSocketClient _client;
     private readonly HttpClient _httpClient = new();
     
+    private SimpleLinkConfiguration _simpleLinkConfiguration => Configuration.Instance.SimpleLinkConfiguration;
+    
     #region Cached Stuff
     
     private readonly Emoji _tickEmoji = new("✅");
@@ -854,7 +856,7 @@ public class DiscordWorker
             if (groups.Contains(Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame))
             {
                 Log.Debug("Removing user {steamId} from linked group as not found on discord.", steamId);
-                _connector.SendCommandRcon($"o.usergroup remove {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+                _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "remove", steamId, _simpleLinkConfiguration.LinkingGroupInGame), null);
                 _connector.SendCommandRcon($"pm {steamId} You were not found on our discord (discord.gg/rustreborn). Your in-game link status has been revoked. Rejoin the discord to receive it back.", null);
             }
             
@@ -875,12 +877,12 @@ public class DiscordWorker
                     
                 // give out group
                 Log.Debug("Adding user {steamId} to group {groupName}.", steamId, groupName);
-                _connector.SendCommandRcon($"o.usergroup add {steamId} {groupName}", null);
+                _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, groupName), null);
             }
             else if (groups.Contains(groupName)) // make sure to remove the group
             {
                 Log.Debug("Removing user {steamId} from group {groupName}.", steamId, groupName);
-                _connector.SendCommandRcon($"o.usergroup remove {steamId} {groupName}", null);
+                _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "remove", steamId, groupName), null);
             }
         }
         
@@ -888,7 +890,7 @@ public class DiscordWorker
         if (!groups.Contains(Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame))
         {
             Log.Debug("Adding user {steamId} to linked group.", steamId);
-            _connector.SendCommandRcon($"o.usergroup add {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+            _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, _simpleLinkConfiguration.LinkingGroupInGame), null);
             _connector.SendCommandRcon($"pm {steamId} Your accounts have been linked!", null);
         }
     }
@@ -926,7 +928,7 @@ public class DiscordWorker
             {
                 // give out group
                 Log.Debug("Adding user {steamId} to group {groupName}.", steamId, groupName);
-                _connector.SendCommandRcon($"o.usergroup add {steamId} {groupName}", null);
+                _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, groupName), null);
             }
             /*else // make sure to remove the group
             {
@@ -937,7 +939,7 @@ public class DiscordWorker
         
         // Always give linked role if player is linked
         Log.Debug("Adding user {steamId} to linked group.", steamId);
-        _connector.SendCommandRcon($"o.usergroup add {steamId} {Configuration.Instance.SimpleLinkConfiguration.LinkingGroupInGame}", null);
+        _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, _simpleLinkConfiguration.LinkingGroupInGame), null);
         //_connector.SendCommandRcon($"pm {steamId} Your accounts have been linked!", null);
     
     }
