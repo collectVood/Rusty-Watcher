@@ -16,7 +16,7 @@ namespace RustyWatcher
         private const string LOG_FILE = "log.txt";
 
         public static readonly RequestOptions RetryAlwaysRequest = new()
-            {RetryMode = RetryMode.AlwaysRetry, Timeout = 5};
+            {RetryMode = RetryMode.RetryTimeouts | RetryMode.Retry502, Timeout = 5};
         
         private static LogConfiguration _logConfiguration => Configuration.Instance.LogConfiguration;
         

@@ -49,7 +49,7 @@ public class DiscordGlobalWorker
                              | GatewayIntents.GuildMessageReactions | GatewayIntents.GuildMessages | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildWebhooks 
                              | GatewayIntents.GuildIntegrations | GatewayIntents.GuildEmojis | GatewayIntents.GuildBans | GatewayIntents.Guilds | GatewayIntents.GuildMembers,
             ConnectionTimeout = -1,
-            DefaultRetryMode = RetryMode.AlwaysRetry
+            DefaultRetryMode = RetryMode.RetryTimeouts | RetryMode.Retry502
         });
         
         Task.Run(InitializeBot);
