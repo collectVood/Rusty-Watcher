@@ -91,6 +91,8 @@ public class DiscordWorker
         _client.MessageReceived += OnMessageReceived;
         _client.ReactionAdded += OnReactionAdded;
         _client.SlashCommandExecuted += OnSlashCommandExecuted;
+        _client.UserLeft += OnUserLeave;
+        _client.GuildMemberUpdated += OnGuildMemberUpdated;
         
         await Task.Delay(-1);
     }
@@ -124,6 +126,23 @@ public class DiscordWorker
     private Task OnReady()
     {
         Task.Run(SetupSlashCommands);
+        
+        return Task.CompletedTask;
+    }
+    
+    private Task OnUserLeave(SocketGuild guild, SocketUser user)
+    {
+        _ = ForceRoleUnsyncingAll(user);
+        return Task.CompletedTask;
+    }
+
+    private Task OnGuildMemberUpdated(Cacheable<SocketGuildUser, ulong> before, SocketGuildUser after)
+    {
+        if (!before.HasValue)
+            return Task.CompletedTask;
+
+        _ = ForceRoleSyncing(after, after.Roles.Except(before.Value.Roles).ToList(),
+            before.Value.Roles.Except(after.Roles).ToList());
         
         return Task.CompletedTask;
     }
@@ -823,6 +842,37 @@ public class DiscordWorker
         }
     }
     
+    private async Task<ulong> GetSteamId(ulong discordId)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"{Configuration.Instance.SimpleLinkConfiguration.LinkingEndpoint}/api.php?action=findByDiscord&id={discordId}&secret={Configuration.Instance.SimpleLinkConfiguration.LinkingApiKey}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound) // api actually returns this if no steamid found, so to avoid spam
+                return 0UL;
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.Warning("{0} Request failed SteamId : Code {1}", GetTag(), response.StatusCode);
+                return 0UL;
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            responseContent = responseContent.Trim('"');
+
+            if (!ulong.TryParse(responseContent, out var steamId)) 
+                steamId = 0UL;
+
+            return steamId;
+        }
+        catch (Exception e)
+        {
+            _logger.Error(e, "{0} Failed DiscordWorker.GetSteamId()");
+            return 0UL;
+        }
+    }
+    
     private async Task TryRoleSyncing(ResponsePacket? response, ulong steamId)
     {
         if (response == null || string.IsNullOrEmpty(response.MessageContent))
@@ -941,7 +991,75 @@ public class DiscordWorker
         Log.Debug("Adding user {steamId} to linked group.", steamId);
         _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, _simpleLinkConfiguration.LinkingGroupInGame), null);
         //_connector.SendCommandRcon($"pm {steamId} Your accounts have been linked!", null);
+    }
     
+    private async Task ForceRoleUnsyncingAll(SocketUser user)
+    {
+        if (!Configuration.Instance.SimpleLinkConfiguration.ForceSync)
+            return;
+        
+        var steamId = await GetSteamId(user.Id);
+        if (steamId == 0UL)
+            return;
+
+        var groupNames = string.Join(" ", Configuration.Instance.SimpleLinkConfiguration.RoleSyncing.Values);
+        if (string.IsNullOrEmpty(groupNames))
+            groupNames = _simpleLinkConfiguration.LinkingGroupInGame;
+        else
+            groupNames += $" {_simpleLinkConfiguration.LinkingGroupInGame}";
+        
+        Log.Debug("Removing user {steamId} from groups {groupNames}", steamId, groupNames);
+        _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "remove", steamId, groupNames), null);
+    }
+    
+    private async Task ForceRoleSyncing(IGuildUser user, List<SocketRole> addedRoles, List<SocketRole> removedRoles)
+    {
+        if (!Configuration.Instance.SimpleLinkConfiguration.ForceSync)
+            return;
+        
+        var steamId = await GetSteamId(user.Id);
+        if (steamId == 0UL)
+            return;
+
+        var addedRoleIds = addedRoles.Select(x => x.Id).ToArray();
+        if (addedRoles.Count > 0)
+        {
+            foreach (var (roleId, groupName) in Configuration.Instance.SimpleLinkConfiguration.RoleSyncing)
+            {
+                if (addedRoleIds.Contains(roleId))
+                {
+                    // give out group
+                    Log.Debug("Adding user {steamId} to group {groupName}.", steamId, groupName);
+                    _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, groupName), null);
+                }
+            }
+
+            if (addedRoleIds.Contains(_simpleLinkConfiguration.LinkingGroupDiscord))
+            {
+                Log.Debug("Adding user {steamId} to linked group.", steamId);
+                _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "add", steamId, _simpleLinkConfiguration.LinkingGroupInGame), null);
+            }
+        }
+        
+        var removedRoleIds = removedRoles.Select(x => x.Id).ToArray();
+        if (removedRoleIds.Length > 0)
+        {
+            foreach (var (roleId, groupName) in Configuration.Instance.SimpleLinkConfiguration.RoleSyncing)
+            {
+                if (removedRoleIds.Contains(roleId))
+                {
+                    // give out group
+                    Log.Debug("Removing user {steamId} from group {groupName}.", steamId, groupName);
+                    _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "remove", steamId, groupName), null);
+                }
+            }
+
+            if (removedRoleIds.Contains(_simpleLinkConfiguration.LinkingGroupDiscord))
+            {
+                Log.Debug("Removing user {steamId} from linked group.", steamId);
+                _connector.SendCommandRcon(string.Format(_simpleLinkConfiguration.UserGroupCommand, "remove", steamId, _simpleLinkConfiguration.LinkingGroupInGame), null);
+            }
+        }
     }
     
     public Color GetDiscordMessageColor()
