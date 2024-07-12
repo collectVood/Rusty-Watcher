@@ -35,6 +35,9 @@ public class Configuration
     [JsonProperty("Logging", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public LogConfiguration LogConfiguration = new();
     
+    [JsonProperty("Spaming", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+    public SpamConfiguration SpamConfiguration = new();
+    
     [JsonIgnore] public static Configuration Instance;
     
     [JsonIgnore] private const string CONFIG_FOLDER = "Configuration";

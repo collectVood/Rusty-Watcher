@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using RustyWatcher.Configurations;
 using RustyWatcher.Controllers;
 using Serilog;
 
@@ -34,32 +36,51 @@ public class SpamHandler
     
     private class MessageData
     {
-        private static readonly TimeSpan _allowedSendFrequency = TimeSpan.FromSeconds(7);
+        private static SpamConfiguration _config => Configuration.Instance.SpamConfiguration;
 
-        private DateTime _last;
-        private string _lastContent;
-        private int _triggerCount;
-        
-        public MessageData()
-        {
-            _lastContent = string.Empty;
-            _last = DateTime.UtcNow.Subtract(_allowedSendFrequency);
-            _triggerCount = 0;
-        }
+        private DateTime _last = DateTime.UtcNow.Subtract(_config.AllowedSendFrequency);
+        private readonly List<string> _pastContents = new();
+        private int _quickSpamTriggerCount;
 
         public bool IsSpamAndUpdate(string content)
         {
-            // Spam
-            if (content == _lastContent && DateTime.UtcNow - _last < _allowedSendFrequency)
+            var prevMsgTime = _last;
+            _last = DateTime.UtcNow;
+            
+            content = content.ToLower();
+            
+            var lastContent = _pastContents.Count > 1 ? _pastContents[_pastContents.Count - 1] : string.Empty;
+            _pastContents.Add(content);
+            
+            // Spam same message
+            var sameContentStreak = GetSameContentStreak(content); // expected to be 1 by default
+            if (sameContentStreak >= _config.ContentStreakMuteCeiling && content.Length > _config.IgnoreContentStreakLengthFloor)
+                return true;
+            
+            // Quick spam
+            if (content == lastContent && DateTime.UtcNow - prevMsgTime < _config.AllowedSendFrequency)
             {
-                _triggerCount++;
-                return _triggerCount >= 3;
+                _quickSpamTriggerCount++;
+                return _quickSpamTriggerCount >= 3;
+            }
+            
+            _quickSpamTriggerCount = 0;
+            return false;
+        }
+
+        private int GetSameContentStreak(string baseContent)
+        {
+            var count = 0;
+            for (var i = _pastContents.Count - 1; i >= 0; i--)
+            {
+                var content = _pastContents[i];
+                if (content != baseContent || Regex.IsMatch(content, _config.IgnoreContentStreakRegex))
+                    break;
+                
+                count++;
             }
 
-            _last = DateTime.UtcNow;
-            _lastContent = content;
-            _triggerCount = 0;
-            return false;
+            return count;
         }
     }
 }
