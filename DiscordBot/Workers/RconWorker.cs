@@ -251,7 +251,7 @@ public class RconWorker
         if (!_awaitingCallback.TryGetValue(currentIdentifier, out var responseAction))
             return;
         
-        responseAction?.Invoke(null);
+        await responseAction.Invoke(null);
         _awaitingCallback.Remove(currentIdentifier);
     }
     

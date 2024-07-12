@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -28,6 +29,7 @@ public class DiscordWorker
     private readonly ServerConfiguration _configuration;
     private readonly DiscordSocketClient _client;
     private readonly HttpClient _httpClient = new();
+    private readonly ConcurrentDictionary<int, List<ResponsePacket>> _responsePacketBundles = new();
     
     private SimpleLinkConfiguration _simpleLinkConfiguration => Configuration.Instance.SimpleLinkConfiguration;
     
@@ -186,7 +188,7 @@ public class DiscordWorker
                 var success = _connector.SendCommandRcon(commandArguments,
                     async response =>
                     {
-                        await ProcessCommandRconCallback(response, command);
+                        await PreProcessCommandRconCallback(response, command);
                     });
                 
                 if (!success)
@@ -300,83 +302,121 @@ public class DiscordWorker
         await textChannel.SendMessageAsync(null, false, embedBuilder.Build());
     }
     
-    private async Task ProcessCommandRconCallback(ResponsePacket? response, SocketSlashCommand command)
+    private async Task PreProcessCommandRconCallback(ResponsePacket? response, SocketSlashCommand command)
+    {
+        if (response == null)
+        {
+            await ProcessCommandRconCallback(null, command);
+            return;
+        }
+        
+        var identifier = response.Identifier;
+        if (!_responsePacketBundles.TryGetValue(identifier, out var packets))
+            _responsePacketBundles[identifier] = packets = new List<ResponsePacket>();
+        
+        packets.Add(response);
+
+        // Bundle response and process after delay
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(2000);
+
+            // already processed in other execution
+            if (!_responsePacketBundles.TryGetValue(identifier, out var responses) || responses.Count < 1)
+                return;
+
+            _ = ProcessCommandRconCallback(responses, command);
+            
+            // received all packets
+            _responsePacketBundles.TryRemove(identifier, out _);
+        });
+    }
+    
+    private async Task ProcessCommandRconCallback(List<ResponsePacket>? responses, SocketSlashCommand command)
     {
         const string timedOutRcon = "```⚡ No response from the Server.```";
         const string doneString = "✅️ **DONE**";
         const string timedOutString = "⚡️ **TIMED-OUT**";
-
-        var embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", _client.CurrentUser.GetAvatarUrl() ?? null);
-        embedBuilder.WithColor(_configuration.Chatlog.ServerMessageColour.ToDiscordColor());
-        embedBuilder.WithCustomFooter();
         
-        if (response == null)
+        var embeds = new List<Embed>();
+        if (responses == null)
         {
+            var embedBuilder = new EmbedBuilder();
+            embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", _client.CurrentUser.GetAvatarUrl() ?? null);
+            embedBuilder.WithColor(_connector.GetDiscordMessageColor());
+            embedBuilder.WithCustomFooter();
             embedBuilder.WithDescription(timedOutRcon);
+            embeds.Add(embedBuilder.Build());
         }
         else
         {
-            var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
-
-            // Basic pagination
-            if (cleanContent.Length > 2000)
+            foreach (var response in responses)
             {
-                var splitText = cleanContent.SplitInParts(2000);
-                var embeds = new Embed[splitText.Length];
-            
-                for (int i = 0; i < splitText.Length; i++)
+                var embedBuilder = new EmbedBuilder();
+                embedBuilder.WithAuthor($"SERVER ({_connector.GetName()})", _connector.GetDiscordAvatarUrl());
+                embedBuilder.WithColor(_connector.GetDiscordMessageColor());
+                embedBuilder.WithCustomFooter();
+                
+                var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
+                
+                // ensure size bounds
+                if (cleanContent.Length > 2000)
                 {
-                    embedBuilder.WithFooter(i + "/" + (splitText.Length - 1));
+                    var splitText = cleanContent.SplitInParts(2000);
+                    for (var i = 0; i < splitText.Length; i++)
+                    {
+                        embedBuilder.WithFooter($"{i + 1} / {splitText.Length}");
 
-                    var text = splitText[i];
-                    if (string.IsNullOrEmpty(text))
+                        var text = splitText[i];
+                        if (string.IsNullOrEmpty(text))
+                            continue;
+
+                        embedBuilder.WithDescription("```" + text + "```");
+                    }
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(cleanContent))
                         continue;
 
-                    embedBuilder.WithDescription("```" + text + "```");
-                    embeds[i] = embedBuilder.Build();
+                    embedBuilder.WithDescription("```" + cleanContent + "```");
                 }
-            
-                await command.ModifyOriginalResponseAsync(properties =>
-                {
-                    properties.Content = doneString;
-                    properties.Embeds = embeds;
-                });
-            
-                return;
+                
+                embeds.Add(embedBuilder.Build());
             }
-            
-            if (string.IsNullOrEmpty(cleanContent))
-                return;
-
-            embedBuilder.WithDescription("```" + cleanContent + "```");
         }
 
+        var embedsTotal = embeds.ToArray();
+        var embedsToAdd = embedsTotal;
+        
         var originalResponse = await command.GetOriginalResponseAsync();
         if (originalResponse != null && originalResponse.Embeds.Count > 0)
         {
-            var originalEmbedArray = originalResponse.Embeds.ToArray();
-            var embeds = new Embed[originalEmbedArray.Length + 1];
-            for (var i = 0; i < originalEmbedArray.Length; i++)
-                embeds[i] = originalEmbedArray[i];
-            
-            embeds[^1] = embedBuilder.Build(); // last index
-            
-            await command.ModifyOriginalResponseAsync(properties =>
-            {
-                properties.Content = response == null ? timedOutString : doneString;
-                properties.Embeds = embeds;
-                properties.Embed = null;
-            });
-            
-            return;
+            embedsTotal = originalResponse.Embeds.Concat(embeds).ToArray();
+            embedsToAdd = embedsTotal;
         }
         
+        const int maxEmbedsPerMessage = 10;
+        
+        if (embedsToAdd.Length > maxEmbedsPerMessage) // limit embeds per message
+            embedsToAdd = embedsTotal.Take(maxEmbedsPerMessage).ToArray();
+            
         await command.ModifyOriginalResponseAsync(properties =>
         {
-            properties.Content = response == null ? timedOutString : doneString;
-            properties.Embed = embedBuilder.Build();
+            properties.Content = responses == null ? timedOutString : doneString;
+            properties.Embeds = embedsToAdd;
         });
+
+        if (embedsTotal.Length == embedsToAdd.Length)
+            return;
+        embedsTotal = embedsTotal.Skip(embedsToAdd.Length).ToArray();
+            
+        while (embedsTotal.Length > 0)
+        {
+            embedsToAdd = embedsTotal.Take(maxEmbedsPerMessage).ToArray();
+            await command.Channel.SendMessageAsync(embeds: embedsToAdd);
+            embedsTotal = embedsTotal.Skip(maxEmbedsPerMessage).ToArray();
+        }
     }
 
     public async Task ProcessMessage(ResponseMessage msg)

@@ -28,7 +28,7 @@ public class DiscordGlobalWorker
     
     private string _lastUpdateString;
     private readonly Dictionary<int, CommandConfiguration> _identifierToCommand = new();
-    private readonly ConcurrentDictionary<ulong, List<ResponsePacketBundle>> _responsePacketBundles = new ();
+    private readonly ConcurrentDictionary<ulong, Dictionary<Connector, List<ResponsePacket?>>> _responsePacketBundles = new();
     
     #endregion
     
@@ -171,63 +171,104 @@ public class DiscordGlobalWorker
     
     private async Task PreProcessGlobalCommandRconCallback(Connector connector, ulong identifier, ResponsePacket? response, SocketSlashCommand command)
     {
-        if (!_responsePacketBundles.TryGetValue(identifier, out var packets))
-            _responsePacketBundles[identifier] = packets = new List<ResponsePacketBundle>();
+        if (!_responsePacketBundles.TryGetValue(identifier, out var data))
+            _responsePacketBundles[identifier] = data = new Dictionary<Connector, List<ResponsePacket?>>();
         
-        packets.Add(new ResponsePacketBundle(connector, response));
+        if (!data.TryGetValue(connector, out var packets))
+            data[connector] = packets = new List<ResponsePacket?>();
 
-        if (packets.Count < _connectors.Count) // Keep on waiting
+        packets.Add(response);
+        
+        if (data.Count < _connectors.Count) // Keep on waiting
             return;
 
-        // received all packets
-        _responsePacketBundles.TryRemove(identifier, out _);
-        
-        await ProcessGlobalCommandRconCallback(packets, command);
+        // Bundle response and process after delay
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(2000);
+
+            // already processed in other execution
+            if (!_responsePacketBundles.TryGetValue(identifier, out var responses) || responses.Count < 1)
+                return;
+
+            _ = ProcessGlobalCommandRconCallback(responses, command);
+            
+            // received all packets
+            _responsePacketBundles.TryRemove(identifier, out _);
+        });
     }
     
-    private async Task ProcessGlobalCommandRconCallback(List<ResponsePacketBundle> responses, SocketSlashCommand command)
+    private async Task ProcessGlobalCommandRconCallback(Dictionary<Connector, List<ResponsePacket?>> data, SocketSlashCommand command)
     {
         const string timedOutRcon = "```⚡ No response from the Server.```";
         const string doneString = "✅️ **DONE**";
 
-        var embeds = new Embed[responses.Count];
-        for (var i = 0; i < responses.Count; i++)
+        var embeds = new List<Embed>();
+        foreach (var (connector, responses) in data)
         {
             var embedBuilder = new EmbedBuilder();
-            var response = responses[i];
             
-            embedBuilder.WithAuthor($"SERVER ({response.Connector.GetName()})", response.Connector.GetDiscordAvatarUrl());
-            embedBuilder.WithColor(response.Connector.GetDiscordMessageColor());
+            embedBuilder.WithAuthor($"SERVER ({connector.GetName()})", connector.GetDiscordAvatarUrl());
+            embedBuilder.WithColor(connector.GetDiscordMessageColor());
             embedBuilder.WithCustomFooter();
-            
-            if (response.Packet == null)
+
+            foreach (var response in responses)
             {
-                embedBuilder.WithDescription(timedOutRcon);
-            }
-            else
-            {
-                var cleanContent = Regex.Replace(response.Packet.MessageContent, @"<.+?>", string.Empty);
-                
-                // Basic pagination (skip this for now, and only show first part, later on maybe make multi response with interaction buttons etc)
-                if (cleanContent.Length > 2000)
+                if (response == null)
                 {
-                    cleanContent = cleanContent.SplitInParts(2000)[0];
+                    embedBuilder.WithDescription(timedOutRcon);
                 }
+                else
+                {
+                    var cleanContent = Regex.Replace(response.MessageContent, @"<.+?>", string.Empty);
+                
+                    // Basic pagination (skip this for now, and only show first part, later on maybe make multi response with interaction buttons etc)
+                    if (cleanContent.Length > 2000)
+                    {
+                        cleanContent = cleanContent.SplitInParts(2000)[0];
+                    }
 
-                if (string.IsNullOrEmpty(cleanContent))
-                    return;
+                    if (string.IsNullOrEmpty(cleanContent))
+                        continue;
 
-                embedBuilder.WithDescription("```" + cleanContent + "```");
+                    embedBuilder.WithDescription("```" + cleanContent + "```");
+                }
+                
+                embeds.Add(embedBuilder.Build());
             }
-            
-            embeds[i] = embedBuilder.Build();
         }
 
+        var embedsTotal = embeds.ToArray();
+        var embedsToAdd = embedsTotal;
+        
+        var originalResponse = await command.GetOriginalResponseAsync();
+        if (originalResponse != null && originalResponse.Embeds.Count > 0)
+        {
+            embedsTotal = originalResponse.Embeds.Concat(embeds).ToArray();
+            embedsToAdd = embedsTotal;
+        }
+        
+        const int maxEmbedsPerMessage = 10;
+        
+        if (embedsToAdd.Length > maxEmbedsPerMessage) // limit embeds per message
+            embedsToAdd = embedsTotal.Take(maxEmbedsPerMessage).ToArray();
+            
         await command.ModifyOriginalResponseAsync(properties =>
         {
             properties.Content = doneString;
-            properties.Embeds = embeds;
+            properties.Embeds = embedsToAdd;
         });
+
+        if (embedsTotal.Length == embedsToAdd.Length)
+            return;
+        embedsTotal = embedsTotal.Skip(embedsToAdd.Length).ToArray();
+            
+        while (embedsTotal.Length > 0)
+        {
+            embedsToAdd = embedsTotal.Take(maxEmbedsPerMessage).ToArray();
+            await command.Channel.SendMessageAsync(embeds: embedsToAdd);
+            embedsTotal = embedsTotal.Skip(maxEmbedsPerMessage).ToArray();
+        }
     }
     
     #endregion
@@ -342,16 +383,4 @@ public class DiscordGlobalWorker
     }
     
     #endregion
-    
-    private class ResponsePacketBundle
-    {
-        public readonly Connector Connector;
-        public readonly ResponsePacket? Packet;
-
-        public ResponsePacketBundle(Connector connector, ResponsePacket? packet)
-        {
-            Connector = connector;
-            Packet = packet;
-        }
-    }
 }
