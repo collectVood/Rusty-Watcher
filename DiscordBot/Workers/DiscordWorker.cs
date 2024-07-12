@@ -126,6 +126,7 @@ public class DiscordWorker
     private Task OnReady()
     {
         Task.Run(SetupSlashCommands);
+        Task.Run(SetupCaches);
         
         return Task.CompletedTask;
     }
@@ -587,6 +588,12 @@ public class DiscordWorker
         {
             _logger.Error(e, "{0} Failed DiscordWorker.SetupSlashCommands()");
         }
+    }
+
+    private async Task SetupCaches()
+    {
+        foreach (var guild in _client.Guilds)
+            await guild.DownloadUsersAsync();
     }
     
     private async Task ReceivedMessageDequeue()
