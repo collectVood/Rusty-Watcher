@@ -184,9 +184,9 @@ public class DiscordWorker
                 _logger.Debug("{0} Slash Command Executed '{1}'", GetTag(), commandArguments);
                 
                 var success = _connector.SendCommandRcon(commandArguments,
-                    (response) =>
+                    async response =>
                     {
-                        Task.Run(() => ProcessCommandRconCallback(response, command));
+                        await ProcessCommandRconCallback(response, command);
                     });
                 
                 if (!success)
@@ -483,9 +483,10 @@ public class DiscordWorker
             return;
         }
         
-        _connector.SendCommandRcon($"o.show user {steamId}", (response) =>
+        _connector.SendCommandRcon($"o.show user {steamId}", response =>
         {
             Task.Run(() => TryRoleSyncing(response, steamId));
+            return Task.CompletedTask;
         });
     }
 

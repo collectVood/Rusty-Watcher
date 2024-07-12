@@ -24,7 +24,7 @@ public class RconWorker
     private readonly WebSocket _webSocket;
     private bool _isConnected => _webSocket.ReadyState == WebSocketState.Open && _webSocket.ReadyState != WebSocketState.Closed;
     
-    private readonly Dictionary<int, Action<ResponsePacket?>?> _awaitingCallback = new();
+    private readonly Dictionary<int, Func<ResponsePacket?, Task>> _awaitingCallback = new();
     private readonly List<int> _unrespondedCallback = new();
     private int _currentIdentifier = 1337;
 
@@ -118,7 +118,7 @@ public class RconWorker
             
             if (_awaitingCallback.TryGetValue(result.Identifier, out var responseAction) && !string.IsNullOrEmpty(result.MessageContent))
             {
-                responseAction?.Invoke(result);
+                await responseAction(result);
                 //Log.Debug("{tag} New Callback Message with Identifier: {identifier}\nMessage: {message}", GetTag(), result.Identifier, result.MessageContent);
                 _unrespondedCallback.Remove(result.Identifier);
                 return;
@@ -191,7 +191,7 @@ public class RconWorker
         }
     }
     
-    public bool SendCommand(string cmd, Action<ResponsePacket?>? callback)
+    public bool SendCommand(string cmd, Func<ResponsePacket?, Task>? callback)
     {
         _currentIdentifier++;
         
@@ -199,7 +199,8 @@ public class RconWorker
 
         if (callback != null)
         {
-            _awaitingCallback.Add(_currentIdentifier, callback.Invoke);
+            if (callback != null)
+                _awaitingCallback.Add(_currentIdentifier, callback);
 
             _unrespondedCallback.Add(_currentIdentifier);
         

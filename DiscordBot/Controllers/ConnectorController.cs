@@ -80,7 +80,7 @@ public class Connector
     /// <param name="cmd"></param>
     /// <param name="callback"></param>
     /// <returns></returns>
-    public bool SendCommandRcon(string cmd, Action<ResponsePacket?>? callback)
+    public bool SendCommandRcon(string cmd, Func<ResponsePacket?, Task>? callback)
     {
         return _rconWorker.SendCommand(cmd, callback);
     }
@@ -203,6 +203,7 @@ public class Connector
                 string.Format(_configuration.Population.RconCommand, resultAmount), response => 
                 {
                     _logger.Information("Adjust pop response: {response}", response.MessageContent);
+                    return Task.CompletedTask;
                 });
         }
 

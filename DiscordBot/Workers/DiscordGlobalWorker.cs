@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -27,7 +28,7 @@ public class DiscordGlobalWorker
     
     private string _lastUpdateString;
     private readonly Dictionary<int, CommandConfiguration> _identifierToCommand = new();
-    private readonly Dictionary<ulong, List<ResponsePacketBundle>> _responsePacketBundles = new ();
+    private readonly ConcurrentDictionary<ulong, List<ResponsePacketBundle>> _responsePacketBundles = new ();
     
     #endregion
     
@@ -128,9 +129,9 @@ public class DiscordGlobalWorker
                 foreach (var connector in _connectors)
                 {
                     var success = connector.SendCommandRcon(commandArguments,
-                        (response) =>
+                        async response =>
                         {
-                            Task.Run(() => PreProcessGlobalCommandRconCallback(connector, command.Id, response, command));
+                            await PreProcessGlobalCommandRconCallback(connector, command.Id, response, command);
                         });
 
                     if (success)
@@ -168,7 +169,7 @@ public class DiscordGlobalWorker
 
     #region Methods
     
-    private void PreProcessGlobalCommandRconCallback(Connector connector, ulong identifier, ResponsePacket? response, SocketSlashCommand command)
+    private async Task PreProcessGlobalCommandRconCallback(Connector connector, ulong identifier, ResponsePacket? response, SocketSlashCommand command)
     {
         if (!_responsePacketBundles.TryGetValue(identifier, out var packets))
             _responsePacketBundles[identifier] = packets = new List<ResponsePacketBundle>();
@@ -179,9 +180,9 @@ public class DiscordGlobalWorker
             return;
 
         // received all packets
-        _responsePacketBundles.Remove(identifier);
+        _responsePacketBundles.TryRemove(identifier, out _);
         
-        Task.Run(() => ProcessGlobalCommandRconCallback(packets, command));
+        await ProcessGlobalCommandRconCallback(packets, command);
     }
     
     private async Task ProcessGlobalCommandRconCallback(List<ResponsePacketBundle> responses, SocketSlashCommand command)
