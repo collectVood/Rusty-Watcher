@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using RustyWatcher.Configurations;
 using RustyWatcher.Controllers;
+using RustyWatcher.Extensions;
 using Serilog;
 
 namespace RustyWatcher.Helpers;
@@ -17,6 +19,8 @@ public class SpamHandler
     public SpamHandler(Connector connector)
     {
         _connector = connector;
+
+        _ = ExpireCycle();
     }
     
     public void RegisterMessage(ulong userId, string content)
@@ -33,6 +37,34 @@ public class SpamHandler
         _connector.SendCommandRcon($"mute {userId} 1h Spam", null);
         _logger.Warning("Muted player {userId} for spam.", userId);
     }
+
+    private async Task ExpireCycle()
+    {
+        var frequency = TimeSpan.FromMinutes(1);
+        var expireIds = new List<ulong>();
+        
+        while (true)
+        {
+            foreach (var (userId, messageData) in _recentUserMessages)
+            {
+                if (!messageData.ShouldExpire())
+                    continue;
+                
+                expireIds.Add(userId);
+            }
+
+            if (expireIds.Count > 0)
+            {
+                foreach (var expireId in expireIds)
+                {
+                    _recentUserMessages.Remove(expireId);
+                }
+                expireIds.Clear();
+            }
+
+            await Task.Delay(frequency);
+        }
+    }
     
     private class MessageData
     {
@@ -42,6 +74,11 @@ public class SpamHandler
         private readonly List<string> _pastContents = new();
         private int _quickSpamTriggerCount;
 
+        public bool ShouldExpire()
+        {
+            return _last + TimeSpan.FromMinutes(30) < DateTime.UtcNow;
+        }
+        
         public bool IsSpamAndUpdate(string content)
         {
             var prevMsgTime = _last;
@@ -49,7 +86,7 @@ public class SpamHandler
             
             content = content.ToLower();
             
-            var lastContent = _pastContents.Count > 1 ? _pastContents[_pastContents.Count - 1] : string.Empty;
+            var lastContent = _pastContents.Count > 1 ? _pastContents[^1] : string.Empty;
             _pastContents.Add(content);
             
             // Spam same message
@@ -58,7 +95,7 @@ public class SpamHandler
                 return true;
             
             // Quick spam
-            if (content == lastContent && DateTime.UtcNow - prevMsgTime < _config.AllowedSendFrequency)
+            if (IsSame(content, lastContent) && DateTime.UtcNow - prevMsgTime < _config.AllowedSendFrequency)
             {
                 _quickSpamTriggerCount++;
                 return _quickSpamTriggerCount >= 3;
@@ -74,13 +111,22 @@ public class SpamHandler
             for (var i = _pastContents.Count - 1; i >= 0; i--)
             {
                 var content = _pastContents[i];
-                if (content != baseContent || Regex.IsMatch(content, _config.IgnoreContentStreakRegex))
+                if (!IsSame(content, baseContent) || Regex.IsMatch(content, _config.IgnoreContentStreakRegex))
                     break;
                 
                 count++;
             }
 
             return count;
+        }
+
+        private static bool IsSame(string input1, string input2)
+        {
+            const int minCharLevenshtein = 15;
+            if (input1.Length < minCharLevenshtein || input2.Length < minCharLevenshtein)
+                return input1 == input2;
+
+            return input1.LevenshteinDistanceRate(input2) >= 80;
         }
     }
 }

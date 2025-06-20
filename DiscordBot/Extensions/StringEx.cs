@@ -86,4 +86,50 @@ public static class StringEx
 
         return colour;
     }
+    
+    public static int LevenshteinDistanceRate(this string s, string? c)
+    {
+        if (string.IsNullOrEmpty(c))
+            return 0;
+        
+        var maxLength = Math.Max(s.Length, c.Length);
+        return (int)((1.0 - (double)s.LevenshteinDistance(c) / maxLength) * 100);
+    }
+    
+    public static int LevenshteinDistance(this string input, string t)
+    {
+        var n = input.Length;
+        var m = t.Length;
+
+        // Step 1
+        if (n == 0)
+            return m;
+
+        if (m == 0)
+            return n;
+            
+        var data = new int[n + 1, m + 1];
+
+        for (var i = 0; i <= n; data[i, 0] = i++)
+        {
+        }
+
+        for (var j = 0; j <= m; data[0, j] = j++)
+        {
+        }
+
+        for (var i = 1; i <= n; i++)
+        {
+            for (var j = 1; j <= m; j++)
+            {
+                var cost = t[j - 1] == input[i - 1] ? 0 : 1;
+
+                data[i, j] = Math.Min(
+                    Math.Min(data[i - 1, j] + 1, data[i, j - 1] + 1),
+                    data[i - 1, j - 1] + cost);
+            }
+        }
+
+        return data[n, m];
+    }
 }
