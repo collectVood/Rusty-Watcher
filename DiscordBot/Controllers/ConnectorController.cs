@@ -139,7 +139,7 @@ public class Connector
         
     public async Task UpdateStatusDiscord(string status, bool fail = false)
     {
-        await _discordWorker.SetStatus(status, fail);
+        await _discordWorker.TrySetStatus(status, fail);
     }
     
     #endregion
@@ -163,7 +163,7 @@ public class Connector
     
     public ResponseServerInfo? GetLastServerInfo()
     {
-        return _discordWorker.GetLastServerInfo();
+        return !_rconWorker.IsConnected ? null : _discordWorker.GetLastServerInfo();
     }
     
     private async Task TryGrowth()
@@ -177,7 +177,7 @@ public class Connector
             var lastServerInfo = GetLastServerInfo();
             if (lastServerInfo == null)
             {
-                _logger.Warning("Serverinfo is null in TryGrowth() method. Skipping...");
+                _logger.Debug("Serverinfo is null in TryGrowth() method. Skipping...");
                 continue;
             }
             
