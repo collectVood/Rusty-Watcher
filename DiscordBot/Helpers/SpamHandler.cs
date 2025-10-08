@@ -68,9 +68,9 @@ public class SpamHandler
     
     private class MessageData
     {
-        private static SpamConfiguration _config => Configuration.Instance.SpamConfiguration;
+        private static SpamConfiguration Config => Configuration.Instance.SpamConfiguration;
 
-        private DateTime _last = DateTime.UtcNow.Subtract(_config.AllowedSendFrequency);
+        private DateTime _last = DateTime.UtcNow.Subtract(Config.AllowedSendFrequency);
         private readonly List<string> _pastContents = new();
         private int _quickSpamTriggerCount;
 
@@ -91,11 +91,11 @@ public class SpamHandler
             
             // Spam same message
             var sameContentStreak = GetSameContentStreak(content); // expected to be 1 by default
-            if (sameContentStreak >= _config.ContentStreakMuteCeiling && content.Length > _config.IgnoreContentStreakLengthFloor)
+            if (sameContentStreak >= Config.ContentStreakMuteCeiling && content.Length > Config.IgnoreContentStreakLengthFloor)
                 return true;
             
             // Quick spam
-            if (IsSame(content, lastContent) && DateTime.UtcNow - prevMsgTime < _config.AllowedSendFrequency)
+            if (IsSame(content, lastContent) && DateTime.UtcNow - prevMsgTime < Config.AllowedSendFrequency)
             {
                 _quickSpamTriggerCount++;
                 return _quickSpamTriggerCount >= 3;
@@ -111,7 +111,7 @@ public class SpamHandler
             for (var i = _pastContents.Count - 1; i >= 0; i--)
             {
                 var content = _pastContents[i];
-                if (!IsSame(content, baseContent) || Regex.IsMatch(content, _config.IgnoreContentStreakRegex))
+                if (!IsSame(content, baseContent) || Regex.IsMatch(content, Config.IgnoreContentStreakRegex))
                     break;
                 
                 count++;
@@ -122,11 +122,10 @@ public class SpamHandler
 
         private static bool IsSame(string input1, string input2)
         {
-            const int minCharLevenshtein = 15;
-            if (input1.Length < minCharLevenshtein || input2.Length < minCharLevenshtein)
+            if (input1.Length < Config.MinLengthForLevenshtein || input2.Length < Config.MinLengthForLevenshtein)
                 return input1 == input2;
 
-            return input1.LevenshteinDistanceRate(input2) >= 80;
+            return input1.LevenshteinDistanceRate(input2) >= Config.PercentageForLevenshteinSame;
         }
     }
 }

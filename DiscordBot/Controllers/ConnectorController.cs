@@ -22,7 +22,7 @@ public class Connector
     private readonly DiscordWorker _discordWorker;
     private readonly RconWorker _rconWorker;
     private readonly BalanceController? _balanceController;
-    private readonly SpamHandler _spamHandler;
+    private readonly SpamHandler? _spamHandler;
 
     #endregion
     
@@ -32,7 +32,7 @@ public class Connector
         
         _discordWorker = new DiscordWorker(this, serverConfiguration);
         _rconWorker = new RconWorker(this, serverConfiguration.Rcon);
-        _spamHandler = new SpamHandler(this);
+        _spamHandler = !Configuration.Instance.SpamConfiguration.Use ? new SpamHandler(this) : null;
         
         if (serverConfiguration.Balance.Use)
             _balanceController = new BalanceController(this, _configuration.Balance);
@@ -97,7 +97,7 @@ public class Connector
     {
         await _discordWorker.ProcessMessage(message);
         
-        _spamHandler.RegisterMessage(message.UserID, message.Content);
+        _spamHandler?.RegisterMessage(message.UserID, message.Content);
     }    
     
     public async Task ProcessCommandRconCallback(ResponsePacket response)
