@@ -22,7 +22,7 @@ public class RconWorker
     private readonly RconConfiguration _configuration;
 
     private readonly WebSocket _webSocket;
-    private bool _isConnected => _webSocket.ReadyState == WebSocketState.Open && _webSocket.ReadyState != WebSocketState.Closed;
+    public bool IsConnected => _webSocket.ReadyState == WebSocketState.Open && _webSocket.ReadyState != WebSocketState.Closed;
     
     private readonly Dictionary<int, Func<ResponsePacket?, Task>> _awaitingCallback = new();
     private readonly List<int> _unrespondedCallback = new();
@@ -43,8 +43,8 @@ public class RconWorker
         
         _webSocket = new WebSocket($"ws://{configuration.ServerIP}:{configuration.RconPort}/{configuration.RconPW}");
         
-        Task.Run(InitializeWebSocket);
-        Task.Run(PollServerInfo);
+        _ = Task.Run(InitializeWebSocket);
+        _ = Task.Run(PollServerInfo);
     }
 
     #region Init
@@ -177,7 +177,7 @@ public class RconWorker
                         return;
                     }
                     
-                    if (message == null || message.Content.IsNullOrEmpty())
+                    if (result.Type != LogType.Chat || message == null || message.Content.IsNullOrEmpty())
                         return;
                     
                     await _connector.ProcessMessageDiscord(message);
@@ -231,7 +231,7 @@ public class RconWorker
         var packet = new Packet(message, identifier);
         var msg = JsonConvert.SerializeObject(packet);
 
-        if (!_isConnected)
+        if (!IsConnected)
         {
             _logger.Debug("{0} Trying to send message but websocket not connected!", GetTag());
             return false;
@@ -272,9 +272,12 @@ public class RconWorker
     
     private async Task PollServerInfo()
     {
+        // Add slight delay to ensure if we have multiple rcon workers they won't all try to update concurrently
+        await Task.Delay(TimeSpan.FromSeconds(Random.Shared.Next(1, 20)));
+        
         while (true)
         {
-            if (_isConnected) 
+            if (IsConnected) 
                 SendMessage("serverinfo", (int)PacketIdentifier.ServerInfo);
             else 
                 await _connector.UpdateStatusDiscord("Offline", true);
@@ -285,14 +288,14 @@ public class RconWorker
     
     private async Task TryReconnect()
     {
-        if (!_isConnected)
+        if (!IsConnected)
         {
             await Task.Delay(_configuration.ReconnectDelay * 1000);
             _logger.Information("{0} Reconnecting...", GetTag());
             
             try
             {
-                if (!_isConnected) 
+                if (!IsConnected) 
                     _webSocket.Connect(); 
             }
             catch { }
@@ -301,7 +304,7 @@ public class RconWorker
 
     public void ForceReconnect()
     {
-        if (_isConnected)
+        if (IsConnected)
             _webSocket.Close(); // results in TryReconnect call
         else
             Task.Run(TryReconnect);
