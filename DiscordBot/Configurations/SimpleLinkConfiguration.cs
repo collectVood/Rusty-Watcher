@@ -30,5 +30,5 @@ public class SimpleLinkConfiguration
     public string LinkingGroupInGame = "linked";
     
     [JsonProperty("Linking Group Discord")]
-    public ulong LinkingGroupDiscord = 643133098845929473;
+    public ulong LinkingGroupDiscord;
 }
