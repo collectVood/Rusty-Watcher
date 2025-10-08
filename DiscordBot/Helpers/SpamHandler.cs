@@ -35,7 +35,7 @@ public class SpamHandler
             return;
         
         _connector.SendCommandRcon($"mute {userId} 1h Spam", null);
-        _logger.Warning("Muted player {userId} for spam.", userId);
+        _logger.Information("Muted player {userId} for spam.", userId);
     }
 
     private async Task ExpireCycle()
