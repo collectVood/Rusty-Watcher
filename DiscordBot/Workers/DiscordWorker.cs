@@ -498,7 +498,7 @@ public class DiscordWorker
             
             _lastServerInfoResponse = serverInfo;
             InfluxWorker.AddData(_configuration.Name, serverInfo);
-            var successStatus = await SetStatus(status);
+            var successStatus = await TrySetStatus(status);
 
             //Embed
             if (!_configuration.ServerInfo.ShowEmbed || !successStatus) 
@@ -548,7 +548,7 @@ public class DiscordWorker
         _receivedMessageQueue.Enqueue(embedBuilder.Build());
     }
     
-    public async Task<bool> SetStatus(string status, bool fail = false)
+    public async Task<bool> TrySetStatus(string status, bool fail = false)
     {
         if (!_configuration.ServerInfo.ShowPlayerCountStatus)
             status = _configuration.ServerInfo.StatusMessage;
@@ -556,7 +556,7 @@ public class DiscordWorker
         if (status == _lastUpdateString) 
             return false;
 
-        Log.Information("SetStatus: {Status} / Old {OldStatus} ({UserStatus})", status, _lastUpdateString, _lastUserStatus);
+        Log.Debug("SetStatus: {Status} / Old {OldStatus} ({UserStatus})", status, _lastUpdateString, _lastUserStatus);
         _lastUpdateString = status;
 
         if (_configuration.ServerInfo.ShowPlayerCountStatus)
@@ -564,15 +564,11 @@ public class DiscordWorker
             if (_lastUserStatus == null || fail && _lastUserStatus != UserStatus.DoNotDisturb || !fail && _lastUserStatus != UserStatus.Online)
             {
                 if (fail)
-                {
                     await _client.SetStatusAsync(UserStatus.DoNotDisturb);
-                    _lastUserStatus = UserStatus.DoNotDisturb;
-                }
                 else if (_client.Status != UserStatus.Online)
-                {
                     await _client.SetStatusAsync(UserStatus.Online);
-                    _lastUserStatus = UserStatus.Online;
-                } 
+                
+                _lastUserStatus = _client.Status;
             }
             
             await _client.SetGameAsync(status, null, Enum.Parse<ActivityType>(_configuration.Discord.ActivityType.ToString()));
@@ -642,30 +638,27 @@ public class DiscordWorker
         _logger.Debug("{0} Message dequeue process started!", GetTag());
 
         const int maxAmountOfMessagesPerEmbed = 10;
-
+        
+        var dequeueDelay = TimeSpan.FromSeconds(5);
+        ITextChannel? chatlogChannel = null;
+        
         while (true)
         {
             try
             {
-                int messagesToDequeueAmount = _receivedMessageQueue.Count;
-                if (_receivedMessageQueue.Count > maxAmountOfMessagesPerEmbed)
-                    messagesToDequeueAmount = maxAmountOfMessagesPerEmbed;
-
+                var messagesToDequeueAmount = Math.Min(maxAmountOfMessagesPerEmbed, _receivedMessageQueue.Count);
                 var embeds = new List<Embed>();
-                for (int i = 0; i < messagesToDequeueAmount; i++)
-                {
+                for (var i = 0; i < messagesToDequeueAmount; i++)
                     embeds.Add(_receivedMessageQueue.Dequeue());
-                }
 
                 if (embeds.Count < 1)
                     goto end;
-
-                var chatlogChannel = await _client.GetChannelAsync(_configuration.Chatlog.ChannelId) as ITextChannel;
-                chatlogChannel?.SendMessageAsync(null, false, null, null, null, 
-                    null, null, null, embeds.ToArray());
+                
+                chatlogChannel ??= await _client.GetChannelAsync(_configuration.Chatlog.ChannelId) as ITextChannel;
+                chatlogChannel?.SendMessageAsync(embeds: embeds.ToArray());
                 
                 end:
-                    await Task.Delay(1000);
+                await Task.Delay(dequeueDelay);
             }
             catch (Exception e)
             {
