@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace RustyWatcher.Models.Rcon;
 
@@ -11,7 +12,8 @@ public class ResponsePacket
     public int Identifier;
     
     [JsonProperty("Type")]
-    public string Type;
+    [JsonConverter(typeof(StringEnumConverter))]
+    public LogType Type;
     
     [JsonProperty("Stacktrace")]
     public object Stacktrace;

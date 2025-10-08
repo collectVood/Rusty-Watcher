@@ -1,0 +1,12 @@
+﻿namespace RustyWatcher.Models.Rcon;
+
+public enum LogType
+{
+    Generic,
+    Error,
+    Warning,
+    Chat,
+    Report,
+    ClientPerf,
+    Subscription,
+}
