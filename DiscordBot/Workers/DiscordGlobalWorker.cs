@@ -320,17 +320,15 @@ public class DiscordGlobalWorker
         return "[GLOBAL-DISCORD]";
     }
     
-    private async Task SetStatus(string status, bool fail = false)
+    private async Task SetStatus(string status, UserStatus type)
     {
+        if (_client.Status != type)
+            await _client.SetStatusAsync(type);
+        
         if (status == _lastUpdateString) 
             return;
 
         _lastUpdateString = status;
-        
-        if (fail)
-            await _client.SetStatusAsync(UserStatus.DoNotDisturb);
-        else if (_client.Status != UserStatus.Online) 
-            await _client.SetStatusAsync(UserStatus.Online);
 
         await _client.SetGameAsync(status, null, Enum.Parse<ActivityType>(_configuration.Discord.ActivityType.ToString()));
     }
@@ -346,6 +344,7 @@ public class DiscordGlobalWorker
             var joining = 0;
             var queued = 0;
 
+            var anyConnected = false;
             foreach (var connector in _connectors)
             {
                 var serverInfo = connector.GetLastServerInfo();
@@ -356,10 +355,8 @@ public class DiscordGlobalWorker
                 players += serverInfo.Players;
                 joining += serverInfo.Joining;
                 queued += serverInfo.Queued;
+                anyConnected = true;
             }
-
-            if (maxPlayers == 0 && players == 0) // skip if all serverinfo failed
-                continue;
             
             //Status
             var playersString = string.Empty;
@@ -376,9 +373,16 @@ public class DiscordGlobalWorker
             playersString = string.IsNullOrEmpty(_configuration.ServerInfoGlobal.JoiningFormat)
                 ? (players + joining).ToString()
                 : players.ToString();
-
-            _ = SetStatus(string.Format(_configuration.ServerInfoGlobal.PlayerStatus,
-                playersString, maxPlayers, joiningString, queuedString));
+            
+            var msg = _configuration.Discord.OfflineUserStatus.Message;
+            var statusType = _configuration.Discord.OfflineUserStatus.Type;
+            if (anyConnected)
+            {
+                msg = string.Format(_configuration.ServerInfoGlobal.PlayerStatus,
+                    playersString, maxPlayers, joiningString, queuedString);
+                statusType = UserStatus.Online;
+            }
+            _ = SetStatus(msg, statusType);
         }
     }
     

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Discord;
 using Newtonsoft.Json;
 
 namespace RustyWatcher.Configurations;
@@ -13,6 +14,12 @@ public class DiscordConfiguration
     
     [JsonProperty("Activity type (0 = Playing, 1 = Streaming, 2 = Listening, 3 = Watching)")]
     public int ActivityType;
+
+    [JsonProperty("Connecting User Status")]
+    public UserStatusConfiguration ConnectingUserStatus = new("Connecting..", UserStatus.AFK);
+
+    [JsonProperty("Offline User Status")]
+    public UserStatusConfiguration OfflineUserStatus = new("Unreachable", UserStatus.DoNotDisturb);
     
     [JsonProperty(PropertyName = "Custom Commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public List<CommandConfiguration> Commands = new() { 

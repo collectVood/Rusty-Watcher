@@ -42,7 +42,8 @@ public class DiscordWorker
     private string _region;
     private string _lastUpdateString;
     private UserStatus? _lastUserStatus;
-    private ResponseServerInfo _lastServerInfoResponse;
+    private ResponseServerInfo? _lastServerInfoResponse;
+    private DateTime? _lastServerInfoResponseTime;
 
     private readonly Dictionary<int, CommandConfiguration> _identifierToCommand = new();
 
@@ -497,6 +498,7 @@ public class DiscordWorker
                 players, serverInfo.MaxPlayers, joining, queued);
             
             _lastServerInfoResponse = serverInfo;
+            _lastServerInfoResponseTime = DateTime.UtcNow;
             InfluxWorker.AddData(_configuration.Name, serverInfo);
             var successStatus = await TrySetStatus(status);
 
@@ -548,7 +550,7 @@ public class DiscordWorker
         _receivedMessageQueue.Enqueue(embedBuilder.Build());
     }
     
-    public async Task<bool> TrySetStatus(string status, bool fail = false)
+    public async Task<bool> TrySetStatus(string status, UserStatus userStatus = UserStatus.Online)
     {
         if (!_configuration.ServerInfo.ShowPlayerCountStatus)
             status = _configuration.ServerInfo.StatusMessage;
@@ -561,13 +563,9 @@ public class DiscordWorker
 
         if (_configuration.ServerInfo.ShowPlayerCountStatus)
         {
-            if (_lastUserStatus == null || fail && _lastUserStatus != UserStatus.DoNotDisturb || !fail && _lastUserStatus != UserStatus.Online)
+            if (_lastUserStatus == null || userStatus != _lastUserStatus)
             {
-                if (fail)
-                    await _client.SetStatusAsync(UserStatus.DoNotDisturb);
-                else if (_client.Status != UserStatus.Online)
-                    await _client.SetStatusAsync(UserStatus.Online);
-                
+                await _client.SetStatusAsync(userStatus);
                 _lastUserStatus = _client.Status;
             }
             
@@ -1116,6 +1114,17 @@ public class DiscordWorker
     public ResponseServerInfo? GetLastServerInfo()
     {
         return _lastServerInfoResponse;
+    }
+    
+    public DateTime? GetLastServerInfoTime()
+    {
+        return _lastServerInfoResponseTime;
+    }
+
+    public void InvalidateLastServerInfo()
+    {
+        _lastServerInfoResponseTime = null;
+        _lastServerInfoResponse = null;
     }
     
     #endregion

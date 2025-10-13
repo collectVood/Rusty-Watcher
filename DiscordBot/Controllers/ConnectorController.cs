@@ -136,10 +136,28 @@ public class Connector
     {
         _configuration.ServerInfo.WorldSize = worldSize;
     }
-        
-    public async Task UpdateStatusDiscord(string status, bool fail = false)
+    
+    public bool IsServerInfoTimedOut()
     {
-        await _discordWorker.TrySetStatus(status, fail);
+        var lastInfoTime = _discordWorker.GetLastServerInfoTime();
+        var timeNow = DateTime.UtcNow;
+
+        return lastInfoTime != null &&
+               timeNow - lastInfoTime > TimeSpan.FromSeconds(Configuration.Instance.UpdateDelay) * 2;
+    }
+    
+    public async Task OnConnected()
+    {
+        var config = _configuration.Discord.ConnectingUserStatus;
+        await _discordWorker.TrySetStatus(config.Message, config.Type);
+    }
+    
+    public async Task OnLostConnection()
+    {
+        _discordWorker.InvalidateLastServerInfo();
+        
+        var config = _configuration.Discord.OfflineUserStatus;
+        await _discordWorker.TrySetStatus(config.Message, config.Type);
     }
     
     #endregion

@@ -89,15 +89,15 @@ public class RconWorker
     private void OnClose(object? sender, CloseEventArgs e)
     {
         _logger.Information("{0} Lost Connection!", GetTag());
-        Task.Run(() => _connector.UpdateStatusDiscord("Offline", true));
+        _ = _connector.OnLostConnection();
         Task.Run(TryReconnect);
     }
 
     private void OnOpen(object? sender, EventArgs e)
     {
         _logger.Information("{0} Connected!", GetTag());
-        Task.Run(() => _connector.UpdateStatusDiscord("Connecting..."));
-
+        _ = _connector.OnConnected();
+        
         GetMapSeed();
         GetMapSize();
     }
@@ -277,10 +277,17 @@ public class RconWorker
         
         while (true)
         {
-            if (IsConnected) 
-                SendMessage("serverinfo", (int)PacketIdentifier.ServerInfo);
-            else 
-                await _connector.UpdateStatusDiscord("Offline", true);
+            if (IsConnected)
+            {
+                if (_connector.IsServerInfoTimedOut())
+                    _connector.ReconnectRcon();
+                else
+                    SendMessage("serverinfo", (int)PacketIdentifier.ServerInfo);
+            }
+            else
+            {
+                await _connector.OnLostConnection();
+            }
 
             await Task.Delay(Configuration.Instance.UpdateDelay * 1000);
         }
