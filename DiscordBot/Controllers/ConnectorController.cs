@@ -32,7 +32,7 @@ public class Connector
         
         _discordWorker = new DiscordWorker(this, serverConfiguration);
         _rconWorker = new RconWorker(this, serverConfiguration.Rcon);
-        _spamHandler = !Configuration.Instance.SpamConfiguration.Use ? new SpamHandler(this) : null;
+        _spamHandler = Configuration.Instance.SpamConfiguration.Use ? new SpamHandler(this) : null;
         
         if (serverConfiguration.Balance.Use)
             _balanceController = new BalanceController(this, _configuration.Balance);

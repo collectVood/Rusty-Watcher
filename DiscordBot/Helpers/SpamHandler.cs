@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -13,7 +14,7 @@ public class SpamHandler
 {
     private static readonly ILogger _logger = Log.ForContext<SpamHandler>();
     
-    private readonly Dictionary<ulong, MessageData> _recentUserMessages = new();
+    private readonly ConcurrentDictionary<ulong, MessageData> _recentUserMessages = new();
     private readonly Connector _connector;
     
     public SpamHandler(Connector connector)
@@ -57,7 +58,7 @@ public class SpamHandler
             {
                 foreach (var expireId in expireIds)
                 {
-                    _recentUserMessages.Remove(expireId);
+                    _recentUserMessages.TryRemove(expireId, out _);
                 }
                 expireIds.Clear();
             }
