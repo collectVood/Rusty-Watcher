@@ -12,8 +12,9 @@ namespace RustyWatcher.Helpers;
 
 public class SpamHandler
 {
-    private static readonly ILogger _logger = Log.ForContext<SpamHandler>();
-    
+    private static readonly ILogger Logger = Log.ForContext<SpamHandler>();
+    private static readonly SpamConfiguration Configuration = Configurations.Configuration.Instance.SpamConfiguration;
+
     private readonly ConcurrentDictionary<ulong, MessageData> _recentUserMessages = new();
     private readonly Connector _connector;
     
@@ -24,7 +25,7 @@ public class SpamHandler
         _ = ExpireCycle();
     }
     
-    public void RegisterMessage(ulong userId, string content)
+    public void RegisterMessage(ulong userId, string username, string content)
     {
         if (userId == 0)
             return;
@@ -34,9 +35,13 @@ public class SpamHandler
         
         if (!data.IsSpamAndUpdate(content))
             return;
+
+        var cmd = Configuration.CommandFormat;
+        cmd = cmd.Replace("{SteamId}", userId.ToString());
+        cmd = cmd.Replace("{Username}", username);
+        _connector.SendCommandRcon(cmd, null);
         
-        _connector.SendCommandRcon($"mute {userId} 1h Spam", null);
-        _logger.Information("Muted player {userId} for spam.", userId);
+        Logger.Information("Muted player {userId} / {username} for spam.", userId, username);
     }
 
     private async Task ExpireCycle()
@@ -69,7 +74,7 @@ public class SpamHandler
     
     private class MessageData
     {
-        private static SpamConfiguration Config => Configuration.Instance.SpamConfiguration;
+        private static SpamConfiguration Config => Configurations.Configuration.Instance.SpamConfiguration;
 
         private DateTime _last = DateTime.UtcNow.Subtract(Config.AllowedSendFrequency);
         private readonly List<string> _pastContents = new();

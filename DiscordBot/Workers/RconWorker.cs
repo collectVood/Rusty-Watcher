@@ -12,7 +12,7 @@ using WebSocketSharp;
 
 namespace RustyWatcher.Workers;
 
-public class RconWorker
+public partial class RconWorker
 {
     #region Fields
     
@@ -28,10 +28,13 @@ public class RconWorker
     private readonly List<int> _unrespondedCallback = new();
     private int _currentIdentifier = 1337;
 
+    private readonly Dictionary<ulong, string> _usernames = new();
+
     private const string REGEX_MATCH_JOINED = @".+?joined \[.+?(?=\/)\/[0-9]{17}\]$";
     private const string REGEX_MATCH_JOINED_OPTIONAL = @".+?steamid [0-9]{17} joined";
     private const string REGEX_MATCH_DISCONNECT = @"^[0-9]{17}.+?(?=disconnecting:).+";
     
+    private const string REGEX_MATCH_USERNAME = @"^.*?(?=\swith\ssteamid)";
     private const string REGEX_MATCH_STEAMID = @"[0-9]{17}";
 
     #endregion
@@ -157,21 +160,28 @@ public class RconWorker
                 {
                     if (!result.MessageContent.TryParseJson<ResponseMessage>(out var message))
                     {
-                        if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_JOINED))
+                        if (MatchJoined().IsMatch(result.MessageContent))
                         {
-                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_STEAMID).Value;
-                            _connector.ProcessJoin(ulong.Parse(steamId));
+                            var username = MatchUsername().Match(result.MessageContent).Value;
+                            var steamId = ulong.Parse(MatchSteamId().Match(result.MessageContent).Value);
+                            _usernames[steamId] = username;
+                            _connector.ProcessJoin(username, steamId);
                         }
-                        else if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_JOINED_OPTIONAL)) 
+                        else if (MatchJoinedOptional().IsMatch(result.MessageContent)) 
                         {
                             // if new player basically, otherwise above gets called
-                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_STEAMID).Value;
-                            _connector.ProcessJoin(ulong.Parse(steamId));
+                            var steamId = ulong.Parse(MatchSteamId().Match(result.MessageContent).Value);
+                            var username = steamId.ToString();
+                            _usernames[steamId] = username; // holy poop this garbage code
+                            _connector.ProcessJoin(username, steamId);
                         }                        
-                        else if (Regex.IsMatch(result.MessageContent, REGEX_MATCH_DISCONNECT)) 
+                        else if (MatchDisconnect().IsMatch(result.MessageContent)) 
                         {
-                            var steamId = Regex.Match(result.MessageContent, REGEX_MATCH_STEAMID).Value;
-                            _connector.ProcessDisconnect(ulong.Parse(steamId));
+                            var steamId = ulong.Parse(MatchSteamId().Match(result.MessageContent).Value);
+                            var username = steamId.ToString();
+                            if (_usernames.Remove(steamId, out var usernameFromData))
+                                username = usernameFromData;
+                            _connector.ProcessDisconnect(username, steamId);
                         }
 
                         return;
@@ -224,6 +234,11 @@ public class RconWorker
 
         message = "discordsay  " + JsonConvert.SerializeObject(packetMessage);
         return SendMessage(message, (int)PacketIdentifier.DiscordMessage);
+    }
+
+    public string GetUsername(ulong steamId)
+    {
+        return _usernames.TryGetValue(steamId, out var username) ? username : steamId.ToString();
     }
 
     private bool SendMessage(string message, int identifier)
@@ -316,6 +331,21 @@ public class RconWorker
         else
             Task.Run(TryReconnect);
     }
+
+    [GeneratedRegex(REGEX_MATCH_STEAMID)]
+    private static partial Regex MatchSteamId();
+    
+    [GeneratedRegex(REGEX_MATCH_USERNAME)]
+    private static partial Regex MatchUsername();
+    
+    [GeneratedRegex(REGEX_MATCH_JOINED)]
+    private static partial Regex MatchJoined();
+    
+    [GeneratedRegex(REGEX_MATCH_JOINED_OPTIONAL)]
+    private static partial Regex MatchJoinedOptional();
+    
+    [GeneratedRegex(REGEX_MATCH_DISCONNECT)]
+    private static partial Regex MatchDisconnect();
 
     #endregion
 }

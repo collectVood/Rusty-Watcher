@@ -22,6 +22,9 @@ public class SpamConfiguration
     
     [JsonProperty(PropertyName = "Percentage for Levenshtein to consider the same")]
     public int PercentageForLevenshteinSame = 80;
+
+    [JsonProperty(PropertyName = "Command Format")]
+    public string CommandFormat = "mute {SteamId} \"{Username}\" 1h Spam";
     
     [JsonProperty(PropertyName = "Ignore Content Streak Regex")]
     public string IgnoreContentStreakRegex = @"C-?\d+";

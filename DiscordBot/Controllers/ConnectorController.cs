@@ -96,9 +96,8 @@ public class Connector
     public async Task ProcessMessageDiscord(ResponseMessage message)
     {
         await _discordWorker.ProcessMessage(message);
-        
-        _spamHandler?.RegisterMessage(message.UserID, message.Content);
-    }    
+        _spamHandler?.RegisterMessage(message.UserID, _rconWorker.GetUsername(message.UserID), message.Content);
+    }
     
     public async Task ProcessCommandRconCallback(ResponsePacket response)
     {
@@ -112,17 +111,17 @@ public class Connector
         _balanceController?.AddFps(response.Framerate);
     }   
     
-    public void ProcessJoin(ulong steamId)
+    public void ProcessJoin(string username, ulong steamId)
     {
-        _logger.Debug("{0} User {1} just joined.",  "[" + GetName() + "]", steamId);
+        _logger.Debug("{Tag} User {Username} / {SteamId} just joined.",  "[" + GetName() + "]", username, steamId);
         
         _discordWorker.ProcessMessage(steamId);
         Task.Run(() => _discordWorker.JDLogEntry(steamId, true));
     }    
     
-    public void ProcessDisconnect(ulong steamId)
+    public void ProcessDisconnect(string username, ulong steamId)
     {
-        _logger.Debug("{0} User {1} just disconnected.",  "[" + GetName() + "]", steamId);
+        _logger.Debug("{Tag} User {Username} / {SteamId} just disconnected.",  "[" + GetName() + "]", username, steamId);
 
         Task.Run(() => _discordWorker.JDLogEntry(steamId, false));
     }
