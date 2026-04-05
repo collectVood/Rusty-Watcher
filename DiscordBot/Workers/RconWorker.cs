@@ -29,14 +29,7 @@ public partial class RconWorker
     private int _currentIdentifier = 1337;
 
     private readonly Dictionary<ulong, string> _usernames = new();
-
-    private const string REGEX_MATCH_JOINED = @".+?joined \[.+?(?=\/)\/[0-9]{17}\]$";
-    private const string REGEX_MATCH_JOINED_OPTIONAL = @".+?steamid [0-9]{17} joined";
-    private const string REGEX_MATCH_DISCONNECT = @"^[0-9]{17}.+?(?=disconnecting:).+";
     
-    private const string REGEX_MATCH_USERNAME = @"^.*?(?=\swith\ssteamid)";
-    private const string REGEX_MATCH_STEAMID = @"[0-9]{17}";
-
     #endregion
     
     public RconWorker(Connector connector, RconConfiguration configuration)
@@ -332,19 +325,19 @@ public partial class RconWorker
             Task.Run(TryReconnect);
     }
 
-    [GeneratedRegex(REGEX_MATCH_STEAMID)]
+    [GeneratedRegex("[0-9]{17}")]
     private static partial Regex MatchSteamId();
     
-    [GeneratedRegex(REGEX_MATCH_USERNAME)]
+    [GeneratedRegex(@"^.*?(?=\swith\ssteamid)")]
     private static partial Regex MatchUsername();
     
-    [GeneratedRegex(REGEX_MATCH_JOINED)]
+    [GeneratedRegex(@".+?joined \[.+?(?=\/)\/[0-9]{17}\]$")]
     private static partial Regex MatchJoined();
     
-    [GeneratedRegex(REGEX_MATCH_JOINED_OPTIONAL)]
+    [GeneratedRegex(".+?steamid [0-9]{17} joined")]
     private static partial Regex MatchJoinedOptional();
     
-    [GeneratedRegex(REGEX_MATCH_DISCONNECT)]
+    [GeneratedRegex(@"^\d{1,3}(?:\.\d{1,3}){3}:\d+\/\d{17}\/.+ disconnecting:")]
     private static partial Regex MatchDisconnect();
 
     #endregion
