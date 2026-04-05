@@ -163,8 +163,8 @@ public partial class RconWorker
                         else if (MatchJoinedOptional().IsMatch(result.MessageContent)) 
                         {
                             // if new player basically, otherwise above gets called
+                            var username = MatchUsername().Match(result.MessageContent).Value;
                             var steamId = ulong.Parse(MatchSteamId().Match(result.MessageContent).Value);
-                            var username = steamId.ToString();
                             _usernames[steamId] = username; // holy poop this garbage code
                             _connector.ProcessJoin(username, steamId);
                         }                        
