@@ -46,9 +46,7 @@ public class DiscordGlobalWorker
         
         _client = new DiscordSocketClient(new DiscordSocketConfig()
         {
-            GatewayIntents = GatewayIntents.DirectMessageTyping | GatewayIntents.DirectMessageReactions | GatewayIntents.DirectMessages | GatewayIntents.GuildMessageTyping 
-                             | GatewayIntents.GuildMessageReactions | GatewayIntents.GuildMessages | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildWebhooks 
-                             | GatewayIntents.GuildIntegrations | GatewayIntents.GuildEmojis | GatewayIntents.GuildBans | GatewayIntents.Guilds | GatewayIntents.GuildMembers,
+            GatewayIntents = GatewayIntents.DirectMessageTyping | GatewayIntents.DirectMessageReactions | GatewayIntents.DirectMessages,
             ConnectionTimeout = -1,
             DefaultRetryMode = RetryMode.RetryTimeouts | RetryMode.Retry502
         });
